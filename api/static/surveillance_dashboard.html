@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instagram Surveillance Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            transition: transform 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .filters {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .filter-group label {
+            font-size: 0.9em;
+            color: #666;
+            font-weight: 600;
+        }
+
+        input, select {
+            padding: 10px 15px;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            font-size: 1em;
+            min-width: 200px;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #764ba2;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: white;
+        }
+
+        th {
+            background: #667eea;
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        tr:hover {
+            background: #f9fafb;
+        }
+
+        .gender-male {
+            color: #3b82f6;
+            font-weight: bold;
+        }
+
+        .gender-female {
+            color: #ec4899;
+            font-weight: bold;
+        }
+
+        .gender-unknown {
+            color: #6b7280;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+
+        .status-added {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-deleted {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status-present {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+
+        .confidence-bar {
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 1.2em;
+            color: #667eea;
+        }
+
+        .account-selector {
+            margin-bottom: 30px;
+        }
+
+        .account-selector select {
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 50px;
+            color: #6b7280;
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Instagram Following Surveillance</h1>
+
+        <div class="account-selector">
+            <div class="filter-group">
+                <label for="accountSelect">Compte surveillé:</label>
+                <select id="accountSelect">
+                    <option value="">Chargement...</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="stats-grid" id="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="totalCount">-</div>
+                <div class="stat-label">Total Followings</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="addedCount">-</div>
+                <div class="stat-label">🆕 Nouveaux</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="deletedCount">-</div>
+                <div class="stat-label">❌ Supprimés</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="maleCount">-</div>
+                <div class="stat-label">♂ Hommes</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="femaleCount">-</div>
+                <div class="stat-label">♀ Femmes</div>
+            </div>
+        </div>
+
+        <div class="filters">
+            <div class="filter-group">
+                <label for="searchInput">Rechercher:</label>
+                <input type="text" id="searchInput" placeholder="Username ou nom complet...">
+            </div>
+
+            <div class="filter-group">
+                <label for="genderFilter">Genre:</label>
+                <select id="genderFilter">
+                    <option value="">Tous</option>
+                    <option value="male">♂ Hommes</option>
+                    <option value="female">♀ Femmes</option>
+                    <option value="unknown">? Inconnu</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="statusFilter">Status:</label>
+                <select id="statusFilter">
+                    <option value="">Tous</option>
+                    <option value="added">🆕 Nouveaux</option>
+                    <option value="deleted">❌ Supprimés</option>
+                    <option value="present">✅ Présents</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="tableContainer">
+            <div class="loading">Chargement des données...</div>
+        </div>
+    </div>
+
+    <script>
+        let allData = [];
+        let currentAccount = '';
+
+        // Charger la liste des comptes
+        async function loadAccounts() {
+            try {
+                const response = await fetch('/api/accounts');
+                const accounts = await response.json();
+
+                const select = document.getElementById('accountSelect');
+                select.innerHTML = accounts.map(acc =>
+                    `<option value="${acc.name}">${acc.name} (${acc.total_followings} followings)</option>`
+                ).join('');
+
+                if (accounts.length > 0) {
+                    currentAccount = accounts[0].name;
+                    loadData();
+                }
+            } catch (error) {
+                console.error('Erreur chargement comptes:', error);
+                document.getElementById('accountSelect').innerHTML = '<option>Erreur de connexion</option>';
+            }
+        }
+
+        // Charger les données pour le compte sélectionné
+        async function loadData() {
+            if (!currentAccount) return;
+
+            try {
+                const response = await fetch(`/api/account/${currentAccount}/comparatif`);
+                allData = await response.json();
+
+                updateStats();
+                renderTable(allData);
+            } catch (error) {
+                console.error('Erreur chargement données:', error);
+                document.getElementById('tableContainer').innerHTML =
+                    '<div class="no-data">Aucune donnée disponible. Veuillez lancer un scraping.</div>';
+            }
+        }
+
+        // Mettre à jour les statistiques
+        function updateStats() {
+            const stats = {
+                total: allData.length,
+                added: allData.filter(d => d.status === 'added').length,
+                deleted: allData.filter(d => d.status === 'deleted').length,
+                male: allData.filter(d => d.gender === 'male').length,
+                female: allData.filter(d => d.gender === 'female').length
+            };
+
+            document.getElementById('totalCount').textContent = stats.total;
+            document.getElementById('addedCount').textContent = stats.added;
+            document.getElementById('deletedCount').textContent = stats.deleted;
+            document.getElementById('maleCount').textContent = stats.male;
+            document.getElementById('femaleCount').textContent = stats.female;
+        }
+
+        // Afficher le tableau
+        function renderTable(data) {
+            if (data.length === 0) {
+                document.getElementById('tableContainer').innerHTML =
+                    '<div class="no-data">Aucun following trouvé</div>';
+                return;
+            }
+
+            const genderIcons = {
+                'male': '♂',
+                'female': '♀',
+                'unknown': '?'
+            };
+
+            const statusLabels = {
+                'added': '🆕 Nouveau',
+                'deleted': '❌ Supprimé',
+                'present': '✅ Présent',
+                '': '✅ Présent'
+            };
+
+            const html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Nom complet</th>
+                            <th>Genre</th>
+                            <th>Confiance</th>
+                            <th>Status</th>
+                            <th>Date de scraping</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.map(item => {
+                            const genderClass = `gender-${item.gender || 'unknown'}`;
+                            const statusClass = `status-${item.status || 'present'}`;
+                            const confidence = Math.round((item.confidence || 0.5) * 100);
+
+                            return `
+                                <tr>
+                                    <td><strong>@${item.username}</strong></td>
+                                    <td>${item.fullname || '-'}</td>
+                                    <td class="${genderClass}">
+                                        ${genderIcons[item.gender || 'unknown']}
+                                        ${(item.gender || 'unknown').charAt(0).toUpperCase() + (item.gender || 'unknown').slice(1)}
+                                    </td>
+                                    <td>
+                                        ${confidence}%
+                                        <div class="confidence-bar">
+                                            <div class="confidence-fill" style="width: ${confidence}%"></div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="status-badge ${statusClass}">
+                                            ${statusLabels[item.status] || statusLabels['']}
+                                        </span>
+                                    </td>
+                                    <td>${new Date(item.scraped_at).toLocaleString('fr-FR')}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            document.getElementById('tableContainer').innerHTML = html;
+        }
+
+        // Filtrer les données
+        function filterData() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const gender = document.getElementById('genderFilter').value;
+            const status = document.getElementById('statusFilter').value;
+
+            let filtered = allData.filter(item => {
+                const matchSearch = !search ||
+                    item.username.toLowerCase().includes(search) ||
+                    (item.fullname && item.fullname.toLowerCase().includes(search));
+
+                const matchGender = !gender || item.gender === gender;
+
+                const matchStatus = !status ||
+                    (status === 'present' && (!item.status || item.status === 'present')) ||
+                    item.status === status;
+
+                return matchSearch && matchGender && matchStatus;
+            });
+
+            renderTable(filtered);
+        }
+
+        // Event listeners
+        document.getElementById('accountSelect').addEventListener('change', (e) => {
+            currentAccount = e.target.value;
+            loadData();
+        });
+
+        document.getElementById('searchInput').addEventListener('input', filterData);
+        document.getElementById('genderFilter').addEventListener('change', filterData);
+        document.getElementById('statusFilter').addEventListener('change', filterData);
+
+        // Initialisation
+        loadAccounts();
+
+        // Refresh toutes les 30 secondes
+        setInterval(loadData, 30000);
+    </script>
+</body>
+</html>

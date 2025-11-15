@@ -1,38 +1,101 @@
-# 1️⃣ Ignorer les fichiers de logs d'Airflow (mais garder la config essentielle)
-datalake_final/airflow/logs/
-!datalake_final/airflow/dags/
-!datalake_final/airflow/airflow.cfg
-!datalake_final/airflow/webserver_config.py
+# Fichiers de configuration sensibles
+.env
+.instagram_session
+docker/.env
+*.session
+docker/cookies/
+.claude/
 
-# 2️⃣ Ignorer le dossier `jars/` sauf si certains fichiers sont nécessaires
-datalake_final/jars/
+# Environnements virtuels Python
+venv/
+env/
+ENV/
+.venv
 
-# 3️⃣ Ignorer les fichiers système inutiles
+# Données et logs
+data/
+logs/
+*.log
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Airflow
+airflow/logs/
+airflow/*.db
+airflow/*.pid
+airflow/*.err
+airflow/*.out
+airflow/airflow.cfg
+airflow/webserver_config.py
+
+# Spark
+metastore_db/
+derby.log
+spark-warehouse/
+
+# OS
 .DS_Store
 Thumbs.db
 
-# 4️⃣ Ignorer les fichiers temporaires et caches
-*.log
+# Credentials et secrets
+*.pem
+*.key
+credentials.json
+secrets/
+
+# Base de données locales
+*.db
+*.sqlite
+*.sqlite3
+
+# Fichiers temporaires
 *.tmp
+*.temp
 *.swp
 *.swo
+*~
 
-# 5️⃣ Ignorer les fichiers générés par Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+# Dossiers de données
+data/usage/
+data/formatted/
+data/raw/
+data/generated_scripts/
 
-# 6️⃣ Ignorer les fichiers spécifiques aux IDE
-.vscode/
-.idea/
-*.iml
+# Rapports et exports
+reports/
+exports/
 
-# 7️⃣ Ignorer les fichiers et dossiers spécifiques à Git (sauf si déjà versionné)
-.datalake_final/.git/
-
-# 8️⃣ Ignorer les fichiers de compilation
-*.class
-*.o
-*.so
-*.exe
+# Backups
+*.bak
+*.backup

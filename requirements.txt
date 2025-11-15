@@ -1,0 +1,29 @@
+# Apache Airflow (compatible Python 3.12)
+apache-airflow==2.10.3
+
+# Instagram Scraping (solution gratuite)
+instaloader
+selenium
+webdriver-manager
+
+# Data Processing
+pandas
+pyspark
+
+# Machine Learning - Gender Detection
+gender-guesser
+
+# Database
+psycopg2-binary
+mysql-connector-python
+
+# Elasticsearch
+elasticsearch
+
+# API FastAPI
+fastapi
+uvicorn[standard]
+
+# Utilities
+python-dotenv
+requests
