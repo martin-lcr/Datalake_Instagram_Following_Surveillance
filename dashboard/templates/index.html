@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instagram Following Surveillance - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+    <div x-data="dashboardApp()" x-init="loadData()" class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 class="text-3xl font-bold flex items-center gap-3">
+                            <i class="fab fa-instagram"></i>
+                            Instagram Following Surveillance
+                        </h1>
+                        <p class="text-purple-100 mt-1">Vue globale de tous les comptes surveillés</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-sm text-purple-200">Dernière mise à jour</p>
+                        <p class="text-lg font-semibold" x-text="lastUpdate"></p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Stats globales -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+                <!-- Total Accounts -->
+                <div class="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">Comptes surveillés</p>
+                            <p class="text-3xl font-bold text-gray-900 mt-2" x-text="stats.total_accounts || 0"></p>
+                        </div>
+                        <div class="bg-blue-100 rounded-full p-3">
+                            <i class="fas fa-users text-blue-600 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Total Followings -->
+                <div class="bg-white rounded-lg shadow p-6 border-l-4 border-purple-500">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">Total followings</p>
+                            <p class="text-3xl font-bold text-gray-900 mt-2" x-text="stats.total_followings || 0"></p>
+                        </div>
+                        <div class="bg-purple-100 rounded-full p-3">
+                            <i class="fas fa-user-friends text-purple-600 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Added Today -->
+                <div class="bg-white rounded-lg shadow p-6 border-l-4 border-green-500">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">Ajoutés aujourd'hui</p>
+                            <p class="text-3xl font-bold text-green-600 mt-2" x-text="stats.added_today || 0"></p>
+                        </div>
+                        <div class="bg-green-100 rounded-full p-3">
+                            <i class="fas fa-user-plus text-green-600 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Deleted Today -->
+                <div class="bg-white rounded-lg shadow p-6 border-l-4 border-red-500">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">Supprimés aujourd'hui</p>
+                            <p class="text-3xl font-bold text-red-600 mt-2" x-text="stats.deleted_today || 0"></p>
+                        </div>
+                        <div class="bg-red-100 rounded-full p-3">
+                            <i class="fas fa-user-minus text-red-600 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gender Distribution -->
+                <div class="bg-white rounded-lg shadow p-6 border-l-4 border-yellow-500">
+                    <div class="flex items-center justify-between">
+                        <div class="w-full">
+                            <p class="text-gray-500 text-sm font-medium mb-3">Distribution genre</p>
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-blue-600"><i class="fas fa-mars"></i> Hommes</span>
+                                    <span class="font-semibold" x-text="stats.total_male || 0"></span>
+                                </div>
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-pink-600"><i class="fas fa-venus"></i> Femmes</span>
+                                    <span class="font-semibold" x-text="stats.total_female || 0"></span>
+                                </div>
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-gray-600"><i class="fas fa-question"></i> Inconnu</span>
+                                    <span class="font-semibold" x-text="stats.total_unknown || 0"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Liste des comptes -->
+            <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+                <div class="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+                        <i class="fas fa-list"></i>
+                        Comptes Instagram surveillés
+                    </h2>
+                </div>
+
+                <div x-show="loading" class="p-12 text-center">
+                    <i class="fas fa-spinner fa-spin text-4xl text-purple-600"></i>
+                    <p class="text-gray-600 mt-4">Chargement des données...</p>
+                </div>
+
+                <div x-show="!loading && accounts.length === 0" class="p-12 text-center">
+                    <i class="fas fa-inbox text-6xl text-gray-300"></i>
+                    <p class="text-gray-500 mt-4 text-lg">Aucun compte surveillé pour le moment</p>
+                </div>
+
+                <div x-show="!loading && accounts.length > 0" class="divide-y divide-gray-200">
+                    <template x-for="account in accounts" :key="account.target_account">
+                        <div class="p-6 hover:bg-gray-50 transition-colors cursor-pointer"
+                             @click="window.location.href = `/account/${account.target_account}`">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-4 flex-1">
+                                    <div class="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-full p-4">
+                                        <i class="fab fa-instagram text-white text-2xl"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+                                            <span x-text="account.target_account"></span>
+                                            <i class="fas fa-arrow-right text-purple-600 text-sm"></i>
+                                        </h3>
+                                        <p class="text-gray-500 text-sm mt-1">
+                                            Dernière collecte: <span x-text="formatDate(account.last_scraping_date)"></span>
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-4 gap-6 mr-6">
+                                    <!-- Total -->
+                                    <div class="text-center">
+                                        <p class="text-2xl font-bold text-gray-900" x-text="account.total_followings"></p>
+                                        <p class="text-xs text-gray-500 mt-1">Total followings</p>
+                                    </div>
+
+                                    <!-- Added -->
+                                    <div class="text-center">
+                                        <p class="text-2xl font-bold text-green-600" x-text="account.added_today"></p>
+                                        <p class="text-xs text-gray-500 mt-1">
+                                            <i class="fas fa-plus-circle text-green-500"></i> Ajoutés
+                                        </p>
+                                    </div>
+
+                                    <!-- Deleted -->
+                                    <div class="text-center">
+                                        <p class="text-2xl font-bold text-red-600" x-text="account.deleted_today"></p>
+                                        <p class="text-xs text-gray-500 mt-1">
+                                            <i class="fas fa-minus-circle text-red-500"></i> Supprimés
+                                        </p>
+                                    </div>
+
+                                    <!-- Gender -->
+                                    <div class="text-center">
+                                        <div class="flex justify-center gap-2 text-sm">
+                                            <span class="text-blue-600 font-semibold">
+                                                <i class="fas fa-mars"></i> <span x-text="account.male_count"></span>
+                                            </span>
+                                            <span class="text-pink-600 font-semibold">
+                                                <i class="fas fa-venus"></i> <span x-text="account.female_count"></span>
+                                            </span>
+                                        </div>
+                                        <p class="text-xs text-gray-500 mt-1">H / F</p>
+                                    </div>
+                                </div>
+
+                                <i class="fas fa-chevron-right text-gray-400 text-xl"></i>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="mt-8 text-center text-gray-500 text-sm">
+                <p>
+                    <i class="fas fa-database"></i>
+                    Données mises à jour automatiquement toutes les heures
+                </p>
+                <p class="mt-2">
+                    <a href="http://localhost:8082" target="_blank" class="text-purple-600 hover:text-purple-800">
+                        <i class="fas fa-cog"></i> Airflow
+                    </a>
+                    <span class="mx-2">•</span>
+                    <a href="http://localhost:5601" target="_blank" class="text-purple-600 hover:text-purple-800">
+                        <i class="fas fa-chart-bar"></i> Kibana
+                    </a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function dashboardApp() {
+            return {
+                stats: {},
+                accounts: [],
+                loading: true,
+                lastUpdate: '',
+
+                async loadData() {
+                    this.loading = true;
+                    try {
+                        // Charger les stats globales
+                        const statsResponse = await fetch('/api/stats');
+                        const statsData = await statsResponse.json();
+                        this.stats = statsData.stats || {};
+
+                        // Charger les comptes
+                        const accountsResponse = await fetch('/api/accounts');
+                        const accountsData = await accountsResponse.json();
+                        this.accounts = accountsData.accounts || [];
+
+                        this.lastUpdate = new Date().toLocaleString('fr-FR');
+                    } catch (error) {
+                        console.error('Erreur lors du chargement des données:', error);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                formatDate(dateStr) {
+                    if (!dateStr) return 'N/A';
+                    const date = new Date(dateStr);
+                    return date.toLocaleDateString('fr-FR', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                }
+            }
+        }
+
+        // Auto-refresh toutes les 5 minutes
+        setInterval(() => {
+            location.reload();
+        }, 5 * 60 * 1000);
+    </script>
+</body>
+</html>

@@ -11,7 +11,7 @@ x-airflow-common:
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__CORE__DEFAULT_TIMEZONE: Europe/Paris
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
-    AIRFLOW__WEBSERVER__SECRET_KEY: 'instagram-scraping-secret-key-change-me'
+    AIRFLOW__WEBSERVER__SECRET_KEY: '${AIRFLOW_SECRET_KEY:-please-change-this-secret-key-in-production}'
     # Mode visuel pour Chrome (défaut: false)
     VISUAL_MODE: '${VISUAL_MODE:-false}'
     DISPLAY: '${DISPLAY:-:0}'
@@ -21,6 +21,7 @@ x-airflow-common:
     - ../airflow/logs:/opt/airflow/logs
     - ../data:/opt/airflow/data
     - ./cookies:/opt/airflow/cookies
+    - ../instagram_accounts_to_scrape.txt:/opt/airflow/instagram_accounts_to_scrape.txt
     # Support X11 pour mode visuel
     - /tmp/.X11-unix:/tmp/.X11-unix
   user: "${AIRFLOW_UID:-50000}:0"
@@ -91,7 +92,7 @@ services:
     container_name: instagram-airflow-webserver
     command: webserver
     ports:
-      - "8080:8080"
+      - "8082:8080"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
       interval: 10s
@@ -137,6 +138,31 @@ services:
       _AIRFLOW_WWW_USER_USERNAME: airflow
       _AIRFLOW_WWW_USER_PASSWORD: airflow
     user: "0:0"
+
+  # Dashboard Flask (port 8000)
+  dashboard:
+    build:
+      context: ../dashboard
+      dockerfile: Dockerfile
+    container_name: instagram-dashboard
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      FLASK_SECRET_KEY: ${AIRFLOW_SECRET_KEY:-dev-secret-key}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: always
 
 volumes:
   postgres-db-volume:

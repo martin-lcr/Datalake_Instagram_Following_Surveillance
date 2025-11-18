@@ -3,6 +3,7 @@ from airflow.decorators import task
 from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
 from datetime import datetime, timedelta
+import pendulum
 import os
 import re
 import subprocess
@@ -12,12 +13,13 @@ import glob
 # Configuration et constantes
 # -------------------------------------------------------------------------
 
-BASE_DIR = "/sources/instagram_surveillance"
+# Répertoire de travail Airflow (où sont montés les volumes Docker)
+BASE_DIR = "/opt/airflow"
 SCRIPTS_DIR = os.path.join(BASE_DIR, "scripts")
-ACCOUNTS_FILE = os.path.join(SCRIPTS_DIR, "instagram_accounts_to_scrape.txt")
+ACCOUNTS_FILE = os.path.join(BASE_DIR, "instagram_accounts_to_scrape.txt")  # Fichier à la racine
 UNIFIED_SCRIPT = os.path.join(SCRIPTS_DIR, "instagram_scraping_ml_pipeline.py")
 JARS_PATH = "/opt/airflow/jars/postgresql-42.2.27.jar"  # Jar PostgreSQL
-ES_SPARK_JAR = "/opt/airflow/jars/elasticsearch-spark-30_2.12-8.5.3.jar"  # Jar ES
+ES_SPARK_JAR = "/opt/airflow/jars/elasticsearch-spark-30_2.13-8.11.0.jar"  # Jar ES (Scala 2.13)
 DATA_DIR = os.path.join(BASE_DIR, "data")  # Répertoire de données
 
 # Configuration base de données (Docker-compatible)
@@ -49,11 +51,12 @@ default_args = {
     'retry_delay': timedelta(minutes=5),
 }
 
+# Note: Le timezone Europe/Paris est configuré via AIRFLOW__CORE__DEFAULT_TIMEZONE dans docker-compose.yml
 dag = DAG(
     'instagram_scraping_surveillance_pipeline',
     default_args=default_args,
-    description='Pipeline de surveillance Instagram avec scraping multi-passes + ML + PostgreSQL + Elasticsearch',
-    schedule_interval='@daily',  # Exécution quotidienne
+    description='Pipeline de surveillance Instagram horaire (24x/jour) + agrégation quotidienne à 23h',
+    schedule_interval='@hourly',  # Exécution toutes les heures (24x/jour) en heure locale (Europe/Paris)
     catchup=False,
     tags=['instagram', 'scraping', 'ml', 'surveillance']
 )
@@ -107,13 +110,16 @@ def run_single_account_scraping(account_info: dict):
     Exécute le script unifié de scraping pour un compte Instagram.
     Le script intègre : scraping multi-passes + ML + stockage multi-couches.
     """
+    import sys
+
     account = account_info['account']
 
     print(f"🌀 [run_single_account_scraping] Démarrage scraping pour @{account}...")
 
     # Commande pour exécuter le script unifié avec l'account en paramètre
-    command = f"python3 {UNIFIED_SCRIPT} {account}"
+    command = f"{sys.executable} {UNIFIED_SCRIPT} {account}"
     print(f"🌀 [run_single_account_scraping] Commande : {command}")
+    print(f"🐍 [run_single_account_scraping] Python: {sys.executable} (version {sys.version.split()[0]})")
 
     try:
         result = subprocess.run(
@@ -157,12 +163,21 @@ def aggregate_results(**kwargs):
     3) Compare le final agrégé avec OLD_PARQUET_PATH si présent.
     4) Insère ces Parquets dans PostgreSQL.
     5) Push les chemins des Parquets via XCom pour la tâche d'indexation.
+
+    ⚠️ Cette tâche ne s'exécute qu'à 23h00 (agrégation quotidienne uniquement)
     """
     import glob
     import os
     from datetime import datetime
     from pyspark.sql import SparkSession
     from pyspark.sql.functions import lit
+
+    # Vérification horaire : ne s'exécute qu'à 23h00
+    current_hour = datetime.now().strftime("%H")
+    if current_hour != "23":
+        print(f"⏭️ [aggregate_results] Heure actuelle : {current_hour}h - Agrégation uniquement à 23h00")
+        print(f"⏭️ [aggregate_results] Tâche skippée")
+        return
 
     spark = SparkSession.builder \
         .appName("Aggregation_Scraping") \
@@ -328,10 +343,19 @@ def index_to_elasticsearch(**kwargs):
     """
     Lit final_aggregated.parquet et final_comparatif.parquet (via XCom)
     et les envoie dans Elasticsearch.
+
+    ⚠️ Cette tâche ne s'exécute qu'à 23h00 (indexation quotidienne uniquement)
     """
     from pyspark.sql import SparkSession
     from pyspark.sql.functions import lit
     from datetime import datetime
+
+    # Vérification horaire : ne s'exécute qu'à 23h00
+    current_hour = datetime.now().strftime("%H")
+    if current_hour != "23":
+        print(f"⏭️ [index_to_elasticsearch] Heure actuelle : {current_hour}h - Indexation uniquement à 23h00")
+        print(f"⏭️ [index_to_elasticsearch] Tâche skippée")
+        return
 
     ti = kwargs['ti']
     final_aggregated_file = ti.xcom_pull(task_ids="aggregate_results", key="final_aggregated_file")

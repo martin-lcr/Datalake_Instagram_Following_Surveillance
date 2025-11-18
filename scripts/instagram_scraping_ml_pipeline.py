@@ -11,7 +11,7 @@ import json
 import time
 import glob
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # Selenium imports
@@ -48,13 +48,13 @@ account = sys.argv[1]
 normalized_account = account.replace(".", "-").replace("_", "-")
 
 # Configuration scraping
-NUM_PASSES = 5
+NUM_PASSES = 1  # 1 scraping par heure (24x par jour)
 COOKIES_FILE = "/opt/airflow/cookies/www.instagram.com_cookies.txt"
 SCRAPING_OUTPUT_DIR = f"/tmp/scraping_output_{normalized_account}"
 
 # Configuration stockage
 DATA_BASE_PATH = "/sources/instagram_surveillance/data"
-JARS_PATH = "/opt/airflow/jars/postgresql-42.2.27.jar"
+JARS_PATH = "/opt/airflow/jars/postgresql-42.2.27.jar,/opt/airflow/jars/elasticsearch-spark-30_2.13-8.11.0.jar"
 
 # Configuration base de données
 POSTGRES_HOST = os.getenv("POSTGRES_HOST", "postgres")  # Nom du service Docker
@@ -760,69 +760,139 @@ def main():
     print(f"✅ [INFO] Données usage final => '{usage_parquet_file}' ({df_with_ml.count()} lignes).")
 
     # =============================================================================
-    # ÉTAPE 7 : COMPARAISON TEMPORELLE
+    # ÉTAPE 7 : AGRÉGATION QUOTIDIENNE (uniquement à 23h00)
     # =============================================================================
 
     print("\n" + "="*80)
-    print("ÉTAPE 7 : COMPARAISON TEMPORELLE")
+    print("ÉTAPE 7 : AGRÉGATION QUOTIDIENNE")
     print("="*80)
 
-    base_usage_path = os.path.join(usage_layer, usage_group, usage_table_name, current_date)
-    df_prev = None
-    previous_run = None
+    df_aggregated = None
+    aggregated_parquet_file = None
 
-    if os.path.exists(base_usage_path):
-        dirs = [d for d in os.listdir(base_usage_path) if os.path.isdir(os.path.join(base_usage_path, d))]
-        dirs_sorted = sorted(dirs)
-        for d in dirs_sorted:
-            if d < current_time:
-                previous_run = d
+    # Agrégation uniquement à 23h00
+    if current_time == "2300":
+        print("⏰ Heure d'agrégation (23:00) détectée - Début de l'agrégation des 24 scrapings horaires...")
 
-        if previous_run:
-            prev_usage_file = os.path.join(base_usage_path, previous_run, usage_filename)
-            try:
-                df_prev = spark.read.parquet(prev_usage_file)
-                print(f"✅ [INFO] Données usage précédentes chargées depuis '{prev_usage_file}'.")
-            except Exception as e:
-                print(f"❌ [ERREUR] Lecture usage précédente: {e}")
-                df_prev = None
+        base_usage_path = os.path.join(usage_layer, usage_group, usage_table_name, current_date)
+
+        if os.path.exists(base_usage_path):
+            # Lister tous les répertoires horaires (0000, 0100, ..., 2300)
+            hourly_dirs = [d for d in os.listdir(base_usage_path) if os.path.isdir(os.path.join(base_usage_path, d))]
+            hourly_dirs_sorted = sorted(hourly_dirs)
+
+            print(f"📂 Répertoires horaires trouvés : {len(hourly_dirs_sorted)}")
+            print(f"   {hourly_dirs_sorted}")
+
+            # Charger tous les fichiers horaires
+            all_hourly_dfs = []
+            for hour_dir in hourly_dirs_sorted:
+                hourly_file = os.path.join(base_usage_path, hour_dir, usage_filename)
+                if os.path.exists(hourly_file):
+                    try:
+                        df_hour = spark.read.parquet(hourly_file)
+                        all_hourly_dfs.append(df_hour)
+                        print(f"   ✅ Chargé : {hour_dir} ({df_hour.count()} lignes)")
+                    except Exception as e:
+                        print(f"   ❌ Erreur lecture {hour_dir}: {e}")
+
+            if all_hourly_dfs:
+                # Union de tous les DataFrames horaires
+                from functools import reduce
+                df_all_hours = reduce(lambda df1, df2: df1.unionByName(df2), all_hourly_dfs)
+                print(f"📊 Total avant déduplication : {df_all_hours.count()} lignes")
+
+                # Déduplication par username (garder la dernière occurrence)
+                # On utilise dropDuplicates avec subset=["username"] pour garder une seule ligne par username
+                df_aggregated = df_all_hours.dropDuplicates(["username"])
+                print(f"✅ Total après déduplication : {df_aggregated.count()} lignes uniques")
+
+                # Sauvegarder l'agrégation quotidienne
+                aggregated_filename = "daily_aggregated.parquet"
+                aggregated_output_path = os.path.join(usage_layer, usage_group, usage_table_name, current_date)
+                aggregated_parquet_file = os.path.join(aggregated_output_path, aggregated_filename)
+
+                df_aggregated.write.mode("overwrite").parquet(aggregated_parquet_file)
+                print(f"💾 Agrégation quotidienne sauvegardée : '{aggregated_parquet_file}'")
+            else:
+                print("❌ Aucun fichier horaire trouvé pour l'agrégation")
         else:
-            print("💡 [INFO] Aucune exécution précédente trouvée pour comparaison.")
+            print(f"❌ Répertoire {base_usage_path} introuvable")
     else:
-        print("💡 [INFO] Pas de dossier usage pour ce jour, pas de comparaison possible.")
-
-    if df_prev is not None:
-        df_current_sel = df_with_ml.select("username", "full_name", "predicted_gender", "confidence")
-        df_prev_sel = df_prev.select("username", "full_name", "predicted_gender", "confidence")
-
-        df_added = (df_current_sel
-                    .join(df_prev_sel, on=["username", "full_name"], how="leftanti")
-                    .withColumn("change", lit("added")))
-        df_deleted = (df_prev_sel
-                      .join(df_current_sel, on=["username", "full_name"], how="leftanti")
-                      .withColumn("change", lit("deleted")))
-        df_comparatif = df_added.unionByName(df_deleted)
-
-        print("🔎 [INFO] Tableau comparatif :")
-        print(f"   - Nouveaux followings : {df_added.count()}")
-        print(f"   - Followings supprimés : {df_deleted.count()}")
-        df_comparatif.show(10, truncate=False)
-
-        # Écriture du COMPARATIF en Parquet
-        comparatif_filename = "comparatif_parquet_with_ML.parquet"
-        comparatif_parquet_file = os.path.join(usage_output_path, comparatif_filename)
-
-        df_comparatif.write.mode("overwrite").parquet(comparatif_parquet_file)
-        print(f"✅ [INFO] Données comparatives => '{comparatif_parquet_file}' ({df_comparatif.count()} lignes).")
-    else:
-        print("💡 [INFO] Pas de comparaison effectuée (pas d'exécution précédente).")
+        print(f"⏭️  Heure actuelle : {current_time} - Agrégation uniquement à 23:00")
 
     # =============================================================================
-    # ÉTAPE 8 : POSTGRESQL
+    # ÉTAPE 8 : COMPARAISON QUOTIDIENNE J vs J-1 (uniquement à 23h00)
     # =============================================================================
 
     print("\n" + "="*80)
-    print("ÉTAPE 8 : POSTGRESQL")
+    print("ÉTAPE 8 : COMPARAISON QUOTIDIENNE")
+    print("="*80)
+
+    df_comparatif = None
+
+    # Comparaison uniquement à 23h00
+    if current_time == "2300" and df_aggregated is not None:
+        print("⏰ Heure de comparaison (23:00) détectée - Comparaison J vs J-1...")
+
+        # Calculer la date d'hier
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
+        yesterday_aggregated_path = os.path.join(usage_layer, usage_group, usage_table_name, yesterday, "daily_aggregated.parquet")
+
+        print(f"🔍 Recherche de l'agrégation d'hier : {yesterday_aggregated_path}")
+
+        if os.path.exists(yesterday_aggregated_path):
+            try:
+                df_yesterday = spark.read.parquet(yesterday_aggregated_path)
+                print(f"✅ Données d'hier chargées : {df_yesterday.count()} lignes")
+
+                # Sélection des colonnes pour comparaison
+                df_today_sel = df_aggregated.select("username", "full_name", "predicted_gender", "confidence")
+                df_yesterday_sel = df_yesterday.select("username", "full_name", "predicted_gender", "confidence")
+
+                # Détection des ajouts (présents aujourd'hui, absents hier)
+                df_added = (df_today_sel
+                            .join(df_yesterday_sel, on=["username"], how="leftanti")
+                            .withColumn("change", lit("added")))
+
+                # Détection des suppressions (présents hier, absents aujourd'hui)
+                df_deleted = (df_yesterday_sel
+                              .join(df_today_sel, on=["username"], how="leftanti")
+                              .withColumn("change", lit("deleted")))
+
+                # Union des ajouts et suppressions
+                df_comparatif = df_added.unionByName(df_deleted)
+
+                print("🔎 Résultats de la comparaison quotidienne :")
+                print(f"   ➕ Nouveaux followings : {df_added.count()}")
+                print(f"   ➖ Followings supprimés : {df_deleted.count()}")
+                df_comparatif.show(10, truncate=False)
+
+                # Sauvegarde du comparatif
+                comparatif_filename = "daily_comparatif.parquet"
+                comparatif_output_path = os.path.join(usage_layer, usage_group, usage_table_name, current_date)
+                comparatif_parquet_file = os.path.join(comparatif_output_path, comparatif_filename)
+
+                df_comparatif.write.mode("overwrite").parquet(comparatif_parquet_file)
+                print(f"💾 Comparatif quotidien sauvegardé : '{comparatif_parquet_file}' ({df_comparatif.count()} lignes)")
+
+            except Exception as e:
+                print(f"❌ Erreur lors de la comparaison : {e}")
+                df_comparatif = None
+        else:
+            print(f"💡 Pas d'agrégation trouvée pour hier ({yesterday}) - Première exécution ?")
+    else:
+        if current_time != "2300":
+            print(f"⏭️  Heure actuelle : {current_time} - Comparaison uniquement à 23:00")
+        else:
+            print("⏭️  Pas d'agrégation disponible pour la comparaison")
+
+    # =============================================================================
+    # ÉTAPE 9 : POSTGRESQL
+    # =============================================================================
+
+    print("\n" + "="*80)
+    print("ÉTAPE 9 : POSTGRESQL")
     print("="*80)
 
     table_name_for_db = formatted_table_name.replace("-", "_")
@@ -860,11 +930,11 @@ def main():
             print(f"❌ [ERREUR] Écriture comparatif PostgreSQL : {e}")
 
     # =============================================================================
-    # ÉTAPE 9 : ELASTICSEARCH
+    # ÉTAPE 10 : ELASTICSEARCH
     # =============================================================================
 
     print("\n" + "="*80)
-    print("ÉTAPE 9 : ELASTICSEARCH")
+    print("ÉTAPE 10 : ELASTICSEARCH")
     print("="*80)
 
     try:

@@ -1,467 +1,344 @@
-# 🔍 Instagram Following Surveillance Pipeline
+# 📊 Instagram Following Surveillance Pipeline
 
-> Pipeline automatisé 100% GRATUIT avec scraping multi-passes, détection de genre par IA et stockage multi-couches
+Pipeline automatisé pour surveiller les abonnements Instagram de comptes publics avec détection automatique des changements (nouveaux followings / unfollows) et prédiction du genre par Machine Learning.
 
-[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
-[![Airflow](https://img.shields.io/badge/Airflow-2.8+-orange.svg)](https://airflow.apache.org/)
-[![Selenium](https://img.shields.io/badge/Selenium-4.0+-green.svg)](https://www.selenium.dev/)
-[![Spark](https://img.shields.io/badge/Spark-3.5+-red.svg)](https://spark.apache.org/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+## ✨ Démarrage ultra-rapide (10 minutes)
 
-## 📋 Table des matières
+**Prérequis** :
+- ✅ Docker Desktop installé et lancé
+- ✅ Git installé
 
-- [Fonctionnalités](#-fonctionnalités)
-- [Architecture](#-architecture)
-- [Prérequis](#-prérequis)
-- [Installation](#-installation)
-- [Configuration](#-configuration)
-- [Utilisation](#-utilisation)
-- [API](#-api)
-- [Dashboards Kibana](#-dashboards-kibana)
-- [Troubleshooting](#-troubleshooting)
+**C'est tout !** Python, Make, Airflow, PostgreSQL, Elasticsearch sont tous conteneurisés.
+
+### 1️⃣ Cloner le projet
+
+```bash
+git clone https://github.com/votre-username/Datalake_Instagram_Following_Surveillance.git
+cd Datalake_Instagram_Following_Surveillance
+```
+
+### 2️⃣ Obtenir les cookies Instagram
+
+**Installer l'extension Chrome** : [Get cookies.txt LOCALLY](https://chrome.google.com/webstore/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
+
+**Étapes** :
+1. Connectez-vous à [Instagram](https://www.instagram.com)
+2. Cliquez sur l'extension "Get cookies.txt LOCALLY"
+3. Téléchargez le fichier `www.instagram.com_cookies.txt`
+
+**Placer les cookies** :
+```bash
+mkdir -p docker/cookies
+cp ~/Downloads/www.instagram.com_cookies.txt docker/cookies/
+```
+
+### 3️⃣ Configurer les comptes à surveiller
+
+Ouvrez le fichier `instagram_accounts_to_scrape.txt` :
+```bash
+nano instagram_accounts_to_scrape.txt
+```
+
+Ajoutez les comptes Instagram (un par ligne) :
+```
+nike
+adidas
+puma
+```
+
+### 4️⃣ Lancer l'installation automatique
+
+```bash
+make install
+```
+
+**Cette commande va automatiquement** :
+- ✅ Détecter votre système (Linux/macOS/Windows WSL)
+- ✅ Générer les secrets Airflow
+- ✅ Créer tous les répertoires nécessaires
+- ✅ Valider vos cookies Instagram
+- ✅ Construire toutes les images Docker
+- ✅ Démarrer tous les services (Airflow, PostgreSQL, Elasticsearch, Kibana, Dashboard)
+
+**Durée** : 5-7 minutes (téléchargement + build des images Docker)
+
+### 5️⃣ Accéder aux interfaces
+
+Les dashboards s'ouvrent automatiquement dans votre navigateur ! 🎉
+
+Ou accédez manuellement :
+
+| Interface | URL | Login |
+|-----------|-----|-------|
+| 📊 **Dashboard Instagram** | http://localhost:8000 | - |
+| 🚀 **Airflow** | http://localhost:8082 | airflow / airflow |
+| 📈 **Kibana** | http://localhost:5601 | - |
+
+**Ouverture automatique** :
+```bash
+make open  # Ouvre les 3 dashboards dans le navigateur
+```
+
+**C'est terminé !** 🎉 Le pipeline se lance automatiquement toutes les heures.
 
 ---
 
-## ✨ Fonctionnalités
+## 📋 Fonctionnalités
 
-- ✅ **Scraping multi-passes** avec Selenium (5 passes, déduplication automatique, 698+ followings uniques)
-- ✅ **Extraction robuste** des fullnames (4 méthodes de fallback, taux 85-95%)
-- ✅ **Automatisation** avec Apache Airflow (exécution parallèle multi-comptes)
-- ✅ **Détection de genre par IA** (gender-guesser avec confiance 0-1)
-- ✅ **Comparaisons temporelles** (détection ajouts/suppressions entre exécutions)
-- ✅ **Stockage multi-couches** : RAW (JSON) → FORMATTED (Parquet) → USAGE (horodaté) → COMBINED (agrégé)
-- ✅ **Base de données** PostgreSQL + Elasticsearch
-- ✅ **Dashboards Kibana** pour visualisation analytics
-- ✅ **Traitement Big Data** avec Apache Spark + PySpark
+### Scraping et surveillance
+- ✅ **Scraping automatique** toutes les heures (24 fois/jour)
+- ✅ **Multi-comptes** : Surveillez autant de comptes que vous voulez
+- ✅ **Détection des changements** : Nouveaux followings et unfollows
+- ✅ **Prédiction de genre** : ML automatique (male/female/unknown avec % de confiance)
+- ✅ **Historique complet** : Tous les scrapings sont conservés
 
----
+### Dashboards et visualisations
+- 📊 **Dashboard Web moderne** (port 8000) :
+  - Vue globale : Tous vos comptes surveillés en un coup d'œil
+  - Vue détaillée : Liste complète avec filtres (recherche, genre, statut)
+  - Stats en temps réel : Total, ajouts/suppressions du jour, distribution genre
 
-## 🏗️ Architecture
+- 📈 **Kibana** (port 5601) :
+  - Visualisations avancées
+  - Graphiques de tendances
+  - Recherche full-text
 
+### Architecture Data Lake
 ```
-instagram_accounts_to_scrape.txt (mariadlaura, le.corre_en.longueur)
-                    │
-                    ▼
-┌────────────────────────────────────────────────────────┐
-│         AIRFLOW DAG (Orchestration quotidienne)        │
-│      scraping_surveillance_dag.py - @daily             │
-└────────────────────────────────────────────────────────┘
-                    │
-    ┌───────────────┴───────────────┐
-    │ 1. Génération Scripts         │ (Un script par compte)
-    └───────────────┬───────────────┘
-                    │
-    ┌───────────────┴───────────────┐
-    │ 2. Scraping Multi-Passes      │ (Parallèle - 5 passes chacun)
-    │    scrape_user_multipass_v2   │
-    │    ├─ Selenium Stealth         │
-    │    ├─ 4 méthodes extraction    │
-    │    └─ Déduplication Set Union  │
-    └───────────────┬───────────────┘
-                    │
-    ┌───────────────┴───────────────┐
-    │ 3. Traitement + ML + Stockage │ (Spark-submit)
-    │    script_scraping_to_spark    │
-    │    ├─ Détection Genre (ML)     │
-    │    ├─ RAW (JSON)               │
-    │    ├─ FORMATTED (Parquet)      │
-    │    ├─ USAGE (Parquet horodaté) │
-    │    └─ Comparaison temporelle   │
-    └───────────────┬───────────────┘
-                    │
-    ┌───────────────┴───────────────┐
-    │ 4. Agrégation Multi-Comptes   │
-    │    ├─ final_aggregated         │
-    │    ├─ final_comparatif         │
-    │    └─ final_global_comparatif  │
-    └───────────────┬───────────────┘
-                    │
-         ┌──────────┴──────────┐
-         ▼                     ▼
-┌─────────────────┐  ┌─────────────────┐
-│   PostgreSQL    │  │ Elasticsearch   │
-│  ├─ final_      │  │  ├─ instagram_  │
-│  │  aggregated  │  │  │  scraping_   │
-│  └─ final_      │  │  │  aggregated  │
-│     comparatif  │  │  └─ instagram_  │
-│                 │  │     scraping_   │
-│                 │  │     comparatif  │
-└────────┬────────┘  └────────┬────────┘
-         │                    │
-         └──────────┬─────────┘
-                    ▼
-         ┌─────────────────┐
-         │     Kibana      │
-         │   Dashboards    │
-         │  ├─ Overview    │
-         │  ├─ Changes     │
-         │  └─ Gender ML   │
-         └─────────────────┘
+data/
+├── raw/         # Données brutes JSON du scraping
+├── formatted/   # Données nettoyées avec prédictions ML
+└── usage/       # Agrégations quotidiennes et comparatifs
 ```
 
 ---
 
-## 📦 Prérequis
+## 🎯 Utilisation quotidienne
 
-### Logiciels nécessaires
+### Démarrer les services
+```bash
+make start
+```
 
-- **Python 3.8+**
-- **Apache Airflow 2.8+**
-- **PostgreSQL 12+**
-- **Elasticsearch 8.x**
-- **Kibana 8.x**
-- **Apache Spark 3.5+** (avec PySpark)
-- **Java 8+** (pour Spark)
+### Ouvrir les dashboards
+```bash
+make open
+```
 
-### Compte Instagram
+### Voir le statut
+```bash
+make status
+```
 
-Vous avez besoin d'un compte Instagram (gratuit) pour effectuer le scraping. **Recommandation** : Utilisez un compte secondaire pour éviter tout blocage.
+### Arrêter les services
+```bash
+make stop
+```
+
+### Consulter les logs
+```bash
+make logs              # Tous les logs
+make logs-airflow      # Logs Airflow uniquement
+```
+
+### Déclencher un scraping manuel
+```bash
+make trigger-dag
+```
+
+### Valider les cookies
+```bash
+make validate-cookies
+```
 
 ---
 
-## 🚀 Installation
+## 🔧 Commandes Make disponibles
 
-### 1. Cloner le projet
+| Commande | Description |
+|----------|-------------|
+| `make install` | Installation complète automatique |
+| `make start` | Démarrer tous les services |
+| `make stop` | Arrêter tous les services |
+| `make restart` | Redémarrer tous les services |
+| `make status` | Afficher le statut des services |
+| `make logs` | Voir les logs en temps réel |
+| `make open` | Ouvrir les dashboards dans le navigateur |
+| `make validate-cookies` | Valider les cookies Instagram |
+| `make trigger-dag` | Déclencher un scraping manuel |
+| `make clean` | Supprimer les volumes et données |
+| `make rebuild` | Reconstruire les images sans cache |
+| `make help` | Liste complète des commandes |
 
-```bash
-cd /home/timor/Datalake_Instagram_Following_Surveillance
+---
+
+## 📊 Architecture du système
+
+```
+┌──────────────────────────────────────────────────────────┐
+│            AIRFLOW SCHEDULER (Europe/Paris)              │
+│         Exécution automatique toutes les heures          │
+└──────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌──────────────────────────────────────────────────────────┐
+│  ÉTAPE 1-6 : SCRAPING HORAIRE (Selenium + Chrome)       │
+│  • Extraction des followings Instagram                  │
+│  • Prédiction de genre (ML)                              │
+│  • Stockage Data Lake (RAW → FORMATTED → USAGE)         │
+└──────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌──────────────────────────────────────────────────────────┐
+│  ÉTAPE 7 : AGRÉGATION QUOTIDIENNE (23h00)               │
+│  • Fusion des 24 scrapings horaires                     │
+│  • Déduplication par username                            │
+└──────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌──────────────────────────────────────────────────────────┐
+│  ÉTAPE 8 : COMPARAISON J vs J-1 (23h00)                 │
+│  • Détection nouveaux followings (added)                │
+│  • Détection unfollows (deleted)                         │
+└──────────────────────────────────────────────────────────┘
+                          │
+           ┌──────────────┼──────────────┐
+           ▼              ▼              ▼
+    ┌──────────┐   ┌─────────────┐   ┌──────────┐
+    │PostgreSQL│   │Elasticsearch│   │ Dashboard│
+    │  (SQL)   │   │  (Search)   │   │  (Web)   │
+    └──────────┘   └─────────────┘   └──────────┘
 ```
 
-### 2. Installer les dépendances Python
+---
 
-```bash
-pip install -r requirements.txt
-```
+## 🛠️ Stack technique
 
-### 3. Configuration de l'environnement
-
-```bash
-# Copier le fichier d'exemple
-cp .env.example .env
-
-# Éditer le fichier .env avec vos credentials
-nano .env
-```
-
-**Fichier `.env` à compléter :**
-
-```bash
-INSTAGRAM_USERNAME=votre_username
-INSTAGRAM_PASSWORD=votre_password
-TARGET_INSTAGRAM_ACCOUNT=mariadlaura
-
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_DB=airflow
-POSTGRES_USER=airflow
-POSTGRES_PASSWORD=airflow
-
-ELASTICSEARCH_HOST=localhost
-ELASTICSEARCH_PORT=9200
-```
-
-### 4. Télécharger les JARs nécessaires
-
-```bash
-mkdir -p jars
-cd jars
-
-# PostgreSQL JDBC Driver
-wget https://jdbc.postgresql.org/download/postgresql-42.2.27.jar
-
-# Elasticsearch-Spark Connector
-wget https://repo1.maven.org/maven2/org/elasticsearch/elasticsearch-spark-30_2.12/8.5.3/elasticsearch-spark-30_2.12-8.5.3.jar
-
-cd ..
-```
-
-### 5. Configurer les bases de données
-
-```bash
-# Lancer PostgreSQL (si pas déjà lancé)
-sudo systemctl start postgresql
-
-# Lancer Elasticsearch
-sudo systemctl start elasticsearch
-
-# Créer les tables et index
-python scripts/setup_database.py
-```
-
-### 6. Initialiser Airflow
-
-```bash
-# Initialiser la base de données Airflow
-airflow db init
-
-# Créer un utilisateur admin
-airflow users create \
-    --username admin \
-    --firstname Admin \
-    --lastname User \
-    --role Admin \
-    --email admin@example.com \
-    --password admin
-
-# Copier le DAG dans le dossier Airflow
-cp airflow/dags/instagram_surveillance_dag.py ~/airflow/dags/
-```
+- **Orchestration** : Apache Airflow 2.10.3 (LocalExecutor)
+- **Scraping** : Selenium 4.36 + Chrome headless
+- **Processing** : PySpark 4.0.1
+- **ML** : Gender-guesser 0.4.0 + Scikit-learn 1.6.0
+- **Storage** : PostgreSQL 14 + Elasticsearch 8.11
+- **Visualization** : Flask + Kibana 8.11
+- **Containerization** : Docker + Docker Compose
 
 ---
 
 ## ⚙️ Configuration
 
-### Modifier le compte cible
+### Timezone
+Le pipeline fonctionne en **Europe/Paris (UTC+1)** :
+- Scraping horaire : 00h00 à 23h00 (heure de Paris)
+- Agrégation quotidienne : 23h00 (heure de Paris)
+- Le changement d'heure été/hiver est automatique
 
-Pour surveiller un autre compte Instagram, modifiez la variable `TARGET_INSTAGRAM_ACCOUNT` dans le fichier `.env` :
+### Ports utilisés
+| Service | Port |
+|---------|------|
+| Dashboard Flask | 8000 |
+| Airflow Web UI | 8082 |
+| Kibana | 5601 |
+| Elasticsearch | 9200 |
+| PostgreSQL | 5433 |
 
+### Comptes surveillés
+Éditez simplement le fichier `instagram_accounts_to_scrape.txt` :
 ```bash
-TARGET_INSTAGRAM_ACCOUNT=autre_compte
+nano instagram_accounts_to_scrape.txt
 ```
 
-### Modifier la fréquence de scraping
-
-Éditez le fichier [airflow/dags/instagram_surveillance_dag.py](airflow/dags/instagram_surveillance_dag.py:54) :
-
-```python
-schedule_interval='0 2 * * *',  # Tous les jours à 2h du matin
-```
-
-Exemples de schedule :
-- `'0 */6 * * *'` : Toutes les 6 heures
-- `'0 0 * * 0'` : Tous les dimanches à minuit
-- `'@daily'` : Une fois par jour
-
----
-
-## 🎯 Utilisation
-
-### Lancer le pipeline complet
-
-#### 1. Démarrer les services
-
+Puis redémarrez :
 ```bash
-# Terminal 1 : Airflow Webserver
-airflow webserver --port 8080
-
-# Terminal 2 : Airflow Scheduler
-airflow scheduler
-
-# Terminal 3 : API FastAPI
-cd api
-python main.py
-```
-
-#### 2. Activer le DAG
-
-1. Ouvrez `http://localhost:8080` dans votre navigateur
-2. Connectez-vous avec `admin` / `admin`
-3. Activez le DAG `instagram_surveillance_pipeline`
-4. (Optionnel) Cliquez sur "Trigger DAG" pour lancer immédiatement
-
-#### 3. Vérifier l'exécution
-
-Les logs sont disponibles dans :
-- **Airflow UI** : `http://localhost:8080`
-- **Fichiers logs** : `~/airflow/logs/`
-
-### Tester le scraping manuellement
-
-```bash
-# Scraper uniquement les followers
-python scripts/instagram_scraper.py mariadlaura --type followers
-
-# Scraper uniquement les following
-python scripts/instagram_scraper.py mariadlaura --type following
-
-# Scraper les deux
-python scripts/instagram_scraper.py mariadlaura --type both
-```
-
-### Tester la détection de genre
-
-```bash
-python scripts/gender_detector.py
+make restart
 ```
 
 ---
 
-## 🌐 API
+## 🐛 Troubleshooting
 
-L'API FastAPI expose les données via REST.
+### ❌ Erreur "Login required" lors du scraping
 
-### Démarrer l'API
+**Cause** : Cookies expirés ou invalides
 
+**Solution** :
 ```bash
-cd api
-python main.py
+# 1. Télécharger de nouveaux cookies depuis Instagram
+# 2. Remplacer le fichier
+cp ~/Downloads/www.instagram.com_cookies.txt docker/cookies/
+
+# 3. Valider
+make validate-cookies
+
+# 4. Redémarrer
+make restart
 ```
 
-L'API sera accessible sur `http://localhost:8000`
+### ❌ Services ne démarrent pas
 
-### Documentation interactive
-
-- **Swagger UI** : `http://localhost:8000/docs`
-- **ReDoc** : `http://localhost:8000/redoc`
-
-### Endpoints principaux
-
-#### Followers
-
+**Solution** :
 ```bash
-# Liste des followers
-GET /api/followers?limit=100&gender=female
+# Vérifier que Docker Desktop est lancé
+docker ps
 
-# Détails d'un follower
-GET /api/followers/{username}
+# Voir les logs d'erreur
+make logs
+
+# Rebuild complet
+make rebuild
+make start
 ```
 
-#### Following
+### ❌ Port déjà utilisé (8000, 8082, etc.)
 
+**Solution** :
 ```bash
-# Liste des following
-GET /api/following?limit=100&gender=male
+# Voir quel processus utilise le port
+lsof -i :8000
 
-# Détails d'un following
-GET /api/following/{username}
+# Tuer le processus
+kill -9 <PID>
+
+# Ou modifier les ports dans docker/docker-compose.yml
 ```
 
-#### Changements quotidiens
+### ❌ Le DAG ne s'affiche pas dans Airflow
 
+**Solution** :
 ```bash
-# Derniers changements
-GET /api/diff/latest?data_type=followers
+# Vérifier les erreurs de parsing
+docker compose exec airflow-scheduler airflow dags list-import-errors
 
-# Changements par période
-GET /api/diff/daily?date_from=2025-01-01&date_to=2025-01-31
+# Redémarrer le scheduler
+make restart
 ```
 
-#### Statistiques
+### ❌ Elasticsearch refuse les connexions
 
+**Solution** :
 ```bash
-# Vue d'ensemble
-GET /api/stats/overview
+# Attendre que le service soit healthy
+make status
 
-# Stats par genre
-GET /api/stats/gender?data_type=followers
-
-# Évolution temporelle
-GET /api/stats/timeline?days=30
-```
-
-#### Recherche
-
-```bash
-# Rechercher un utilisateur
-GET /api/search?query=marie&data_type=followers
-```
-
-### Exemples avec curl
-
-```bash
-# Obtenir les statistiques globales
-curl http://localhost:8000/api/stats/overview
-
-# Filtrer les followers féminins
-curl "http://localhost:8000/api/followers?gender=female&limit=50"
-
-# Voir les derniers ajouts
-curl "http://localhost:8000/api/diff/latest?data_type=followers"
+# Elasticsearch doit afficher "Up (healthy)"
+# Cela peut prendre 1-2 minutes au démarrage
 ```
 
 ---
 
-## 📊 Dashboards Kibana
+## 🔐 Sécurité et bonnes pratiques
 
-### Accéder à Kibana
+### Fichiers sensibles (dans .gitignore)
+- ✅ `docker/cookies/` - Ne jamais commit les cookies Instagram
+- ✅ `docker/.env` - Variables d'environnement et secrets
+- ✅ `data/` - Données du Data Lake
+- ✅ `airflow/logs/` - Logs Airflow
 
-```bash
-# Démarrer Kibana
-sudo systemctl start kibana
-
-# Ou avec Docker
-docker run -p 5601:5601 -e "ELASTICSEARCH_HOSTS=http://localhost:9200" kibana:8.11.0
-```
-
-Accédez à `http://localhost:5601`
-
-### Configuration des dashboards
-
-Suivez le guide détaillé : [kibana/setup_kibana.md](kibana/setup_kibana.md)
-
-### Dashboards disponibles
-
-1. **Vue d'ensemble** : Métriques clés, évolution temporelle
-2. **Changements quotidiens** : Ajouts/suppressions par jour
-3. **Analyse de genre** : Répartition et statistiques par genre
-
----
-
-## 🔧 Troubleshooting
-
-### Erreur de connexion Instagram
-
-**Problème** : `LoginRequiredException` ou blocage temporaire
-
-**Solutions** :
-1. Utilisez un compte secondaire
-2. Attendez quelques heures avant de réessayer
-3. Activez l'authentification à deux facteurs sur Instagram
-4. Utilisez le fichier de session pour éviter de se reconnecter
-
-```bash
-# Réutiliser la session
-python scripts/instagram_scraper.py mariadlaura --session ~/.instagram_session
-```
-
-### Erreur PostgreSQL
-
-**Problème** : `psycopg2.OperationalError: could not connect`
-
-**Solutions** :
-```bash
-# Vérifier que PostgreSQL est lancé
-sudo systemctl status postgresql
-
-# Redémarrer PostgreSQL
-sudo systemctl restart postgresql
-
-# Vérifier les credentials dans .env
-```
-
-### Erreur Elasticsearch
-
-**Problème** : `ConnectionError: Connection refused`
-
-**Solutions** :
-```bash
-# Vérifier qu'Elasticsearch est lancé
-curl http://localhost:9200
-
-# Redémarrer Elasticsearch
-sudo systemctl restart elasticsearch
-
-# Vérifier les logs
-tail -f /var/log/elasticsearch/elasticsearch.log
-```
-
-### Erreur Spark
-
-**Problème** : `java.lang.OutOfMemoryError`
-
-**Solutions** :
-```bash
-# Augmenter la mémoire Spark
-export SPARK_DRIVER_MEMORY=4g
-export SPARK_EXECUTOR_MEMORY=4g
-```
-
-### Airflow DAG ne se lance pas
-
-**Solutions** :
-1. Vérifiez les logs : `tail -f ~/airflow/logs/scheduler/latest/*.log`
-2. Testez le DAG : `airflow dags test instagram_surveillance_pipeline`
-3. Vérifiez les paths dans le DAG (BASE_DIR, etc.)
+### Recommandations
+1. **Renouvelez les cookies** régulièrement (tous les 15-30 jours)
+2. **Vérifiez la validité** avec `make validate-cookies` chaque semaine
+3. **Ne partagez jamais** vos cookies Instagram
+4. **Utilisez des mots de passe forts** pour PostgreSQL en production
+5. **Limitez le nombre de comptes** surveillés pour éviter le rate-limiting Instagram
 
 ---
 
@@ -470,61 +347,73 @@ export SPARK_EXECUTOR_MEMORY=4g
 ```
 .
 ├── airflow/
-│   └── dags/
-│       └── instagram_surveillance_dag.py  # DAG principal
-├── api/
-│   ├── main.py                            # API FastAPI
-│   ├── models.py                          # Modèles Pydantic
-│   └── database.py                        # Gestionnaire DB
+│   ├── dags/                    # DAGs Airflow
+│   └── logs/                    # Logs Airflow
+├── dashboard/                   # Application Flask (port 8000)
+│   ├── app.py                   # API REST
+│   ├── templates/               # Templates HTML
+│   └── Dockerfile
+├── docker/
+│   ├── docker-compose.yml       # Services Docker
+│   ├── Dockerfile               # Image Airflow custom
+│   ├── cookies/                 # Cookies Instagram (à placer ici)
+│   └── .env                     # Variables d'environnement
 ├── scripts/
-│   ├── instagram_scraper.py               # Scraper Instagram
-│   ├── gender_detector.py                 # Détection de genre ML
-│   ├── data_processor.py                  # Traitement Spark
-│   └── setup_database.py                  # Setup DB
-├── kibana/
-│   ├── dashboards_config.json             # Config dashboards
-│   └── setup_kibana.md                    # Guide Kibana
-├── data/                                  # Données (généré auto)
-│   ├── raw/                               # Données brutes
-│   ├── formatted/                         # Données formatées
-│   └── usage/                             # Données finales
-├── jars/                                  # JARs Spark
-├── config.py                              # Configuration globale
-├── .env.example                           # Template variables env
-├── requirements.txt                       # Dépendances Python
-└── README.md                              # Ce fichier
+│   ├── instagram_scraping_ml_pipeline.py  # Script principal
+│   └── setup_auto_open.sh       # Configuration auto-open 09h00
+├── data/                        # Data Lake (généré automatiquement)
+│   ├── raw/
+│   ├── formatted/
+│   └── usage/
+├── instagram_accounts_to_scrape.txt  # Liste des comptes à surveiller
+├── Makefile                     # Commandes d'automatisation
+├── README.md                    # Ce fichier
+└── QUICKSTART.md                # Guide rapide 3 minutes
 ```
 
 ---
 
-## 🤝 Contribution
+## 📚 Documentation supplémentaire
 
-Les contributions sont les bienvenues ! N'hésitez pas à :
-- Ouvrir une issue pour signaler un bug
-- Proposer de nouvelles fonctionnalités
-- Soumettre des pull requests
-
----
-
-## 📝 License
-
-Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
+- **[QUICKSTART.md](QUICKSTART.md)** - Guide de démarrage ultra-rapide (3 minutes)
+- **Commandes Make** - `make help` pour la liste complète
+- **Airflow UI** - http://localhost:8082 (documentation intégrée)
 
 ---
 
-## ⚠️ Avertissements
+## ⚠️ Avertissement légal
 
-- **Respect des CGU Instagram** : Ce projet est à usage éducatif. Respectez les conditions d'utilisation d'Instagram.
-- **Rate Limiting** : Ne scrapez pas trop fréquemment pour éviter les blocages.
-- **Données personnelles** : Traitez les données conformément au RGPD.
-- **Sécurité** : Ne commitez JAMAIS vos credentials Instagram dans Git.
+Ce projet est fourni **à des fins éducatives et de recherche uniquement**.
+
+L'utilisation de ce pipeline doit respecter :
+- Les [Conditions d'Utilisation d'Instagram](https://help.instagram.com/581066165581870)
+- Les lois sur la protection des données (RGPD en Europe)
+- Le respect de la vie privée des utilisateurs
+
+⚠️ **Le scraping massif peut entraîner la suspension de votre compte Instagram.**
+
+**Utilisez ce projet de manière responsable** :
+- Ne surveillez que des comptes publics
+- Limitez le nombre de requêtes
+- Respectez les délais entre les scrapings
+- N'utilisez pas les données à des fins commerciales
 
 ---
 
-## 📧 Contact
+## 📞 Support
 
-Pour toute question ou suggestion, ouvrez une issue sur GitHub.
+Pour toute question ou problème :
+
+1. **Vérifiez les commandes** : `make help`
+2. **Consultez les logs** : `make logs`
+3. **Validez les cookies** : `make validate-cookies`
+4. **Consultez le QUICKSTART** : [QUICKSTART.md](QUICKSTART.md)
+5. **Ouvrez une issue** sur GitHub
 
 ---
 
-**Bon scraping ! 🚀**
+## 📄 License
+
+Projet personnel - Utilisation à des fins éducatives et de recherche uniquement.
+
+**Aucune garantie n'est fournie.** Utilisez à vos propres risques.
