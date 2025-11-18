@@ -1,19 +1,39 @@
 # 📊 Instagram Following Surveillance Pipeline
 
-Pipeline automatisé pour surveiller les abonnements Instagram de comptes publics avec détection automatique des changements (nouveaux followings / unfollows) et prédiction du genre par Machine Learning.
+> Pipeline automatisé de surveillance des abonnements Instagram avec détection des changements, prédictions ML et visualisations en temps réel.
 
-## ✨ Démarrage ultra-rapide (10 minutes)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/docker-required-blue.svg)](https://www.docker.com/)
+[![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
+[![Airflow](https://img.shields.io/badge/airflow-2.10.3-orange.svg)](https://airflow.apache.org/)
 
-**Prérequis** :
-- ✅ Docker Desktop installé et lancé
-- ✅ Git installé
+## 🎯 À propos
+
+Ce projet permet de surveiller automatiquement les abonnements (followings) de comptes Instagram publics. Il détecte les nouveaux followings et unfollows, prédit le genre via Machine Learning, et stocke tout l'historique dans un Data Lake structuré.
+
+**Caractéristiques principales** :
+- 🔄 Scraping automatique horaire (24 fois/jour)
+- 📊 Dashboard web moderne (port 8000)
+- 🤖 Prédiction de genre par ML
+- 📈 Visualisations Kibana avancées
+- 💾 Data Lake structuré (RAW → FORMATTED → USAGE)
+- 🐳 100% Dockerisé (aucune installation Python requise)
+
+---
+
+## ✨ Installation rapide (10 minutes)
+
+### Prérequis
+
+- ✅ **Docker Desktop** installé et lancé
+- ✅ **Git** installé
 
 **C'est tout !** Python, Make, Airflow, PostgreSQL, Elasticsearch sont tous conteneurisés.
 
 ### 1️⃣ Cloner le projet
 
 ```bash
-git clone https://github.com/votre-username/Datalake_Instagram_Following_Surveillance.git
+git clone https://github.com/YOUR_USERNAME/Datalake_Instagram_Following_Surveillance.git
 cd Datalake_Instagram_Following_Surveillance
 ```
 
@@ -400,20 +420,108 @@ L'utilisation de ce pipeline doit respecter :
 
 ---
 
-## 📞 Support
+## 🤝 Contribution
 
-Pour toute question ou problème :
+Les contributions sont les bienvenues ! Pour contribuer :
+
+1. **Fork** le projet
+2. Créez une **branche** pour votre feature (`git checkout -b feature/AmazingFeature`)
+3. **Commit** vos changements (`git commit -m 'Add AmazingFeature'`)
+4. **Push** vers la branche (`git push origin feature/AmazingFeature`)
+5. Ouvrez une **Pull Request**
+
+**Guidelines** :
+- Suivez le style de code existant (commentaires en français)
+- Testez vos changements avec `make install`
+- Documentez les nouvelles fonctionnalités dans le README
+
+---
+
+## 📞 Support et Questions
+
+### Pour les problèmes techniques
 
 1. **Vérifiez les commandes** : `make help`
 2. **Consultez les logs** : `make logs`
 3. **Validez les cookies** : `make validate-cookies`
-4. **Consultez le QUICKSTART** : [QUICKSTART.md](QUICKSTART.md)
-5. **Ouvrez une issue** sur GitHub
+4. **Lisez le guide** : [QUICKSTART.md](QUICKSTART.md)
+5. **Ouvrez une issue** sur GitHub avec :
+   - Description du problème
+   - Logs d'erreur (`make logs`)
+   - Système d'exploitation
+   - Version de Docker
+
+### FAQ
+
+**Q : Le scraping échoue avec "Login required"**
+R : Vos cookies ont expiré. Téléchargez-en de nouveaux depuis Instagram et exécutez `make restart`.
+
+**Q : Les services ne démarrent pas**
+R : Vérifiez que Docker Desktop est lancé avec `docker ps`. Si problème, exécutez `make rebuild`.
+
+**Q : Puis-je surveiller des comptes privés ?**
+R : Non, seuls les comptes publics sont supportés. Vous devez aussi être connecté à Instagram via les cookies.
 
 ---
 
 ## 📄 License
 
-Projet personnel - Utilisation à des fins éducatives et de recherche uniquement.
+Ce projet est sous licence **MIT** - voir le fichier [LICENSE](LICENSE) pour plus de détails.
 
-**Aucune garantie n'est fournie.** Utilisez à vos propres risques.
+### Utilisation responsable
+
+⚠️ **IMPORTANT** : Ce projet est fourni **à des fins éducatives et de recherche uniquement**.
+
+**Vous devez** :
+- ✅ Respecter les [Conditions d'Utilisation d'Instagram](https://help.instagram.com/581066165581870)
+- ✅ Respecter les lois sur la protection des données (RGPD en Europe)
+- ✅ Ne surveiller que des comptes publics
+- ✅ Limiter le nombre de requêtes pour éviter le rate-limiting
+- ✅ Utiliser vos propres cookies Instagram
+- ✅ Ne pas revendre ou exploiter commercialement les données
+
+**Vous ne devez pas** :
+- ❌ Scraper massivement (risque de suspension de compte)
+- ❌ Utiliser à des fins commerciales sans autorisation
+- ❌ Partager vos cookies Instagram
+- ❌ Violer la vie privée des utilisateurs
+
+**Disclaimer** : Les auteurs ne sont pas responsables de l'utilisation que vous faites de ce projet. Utilisez-le de manière éthique et responsable.
+
+---
+
+## 👨‍💻 Auteur
+
+Développé par [@YOUR_GITHUB_USERNAME](https://github.com/YOUR_GITHUB_USERNAME)
+
+**Stack technique** :
+- Apache Airflow 2.10.3
+- PySpark 4.0.1
+- Selenium 4.36
+- PostgreSQL 14
+- Elasticsearch 8.11
+- Flask + Tailwind CSS
+
+---
+
+## ⭐ Remerciements
+
+Si ce projet vous a été utile, n'hésitez pas à lui donner une étoile ⭐ sur GitHub !
+
+**Ressources utiles** :
+- [Documentation Airflow](https://airflow.apache.org/docs/)
+- [Docker Documentation](https://docs.docker.com/)
+- [Selenium Documentation](https://selenium-python.readthedocs.io/)
+- [PySpark Documentation](https://spark.apache.org/docs/latest/api/python/)
+
+---
+
+## 📊 Statistiques du projet
+
+![GitHub stars](https://img.shields.io/github/stars/YOUR_USERNAME/Datalake_Instagram_Following_Surveillance?style=social)
+![GitHub forks](https://img.shields.io/github/forks/YOUR_USERNAME/Datalake_Instagram_Following_Surveillance?style=social)
+![GitHub issues](https://img.shields.io/github/issues/YOUR_USERNAME/Datalake_Instagram_Following_Surveillance)
+
+---
+
+**Dernière mise à jour** : Janvier 2025

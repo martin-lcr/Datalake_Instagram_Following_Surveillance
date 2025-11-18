@@ -1,6 +1,9 @@
 # ⚡ QUICKSTART - Démarrage en 10 minutes
 
-Guide ultra-rapide pour lancer le pipeline de surveillance Instagram.
+> Guide ultra-rapide pour déployer le pipeline de surveillance Instagram
+
+[![Docker](https://img.shields.io/badge/docker-required-blue.svg)](https://www.docker.com/)
+[![Time](https://img.shields.io/badge/installation-10_minutes-green.svg)]()
 
 ---
 
@@ -8,8 +11,8 @@ Guide ultra-rapide pour lancer le pipeline de surveillance Instagram.
 
 Avant de commencer, assurez-vous d'avoir **uniquement** :
 
-✅ **Docker Desktop** installé et **lancé**
-✅ **Git** installé
+- ✅ **Docker Desktop** installé et **lancé**
+- ✅ **Git** installé
 
 **C'est tout !** Pas besoin de Python, Make, PostgreSQL, Elasticsearch... Tout est conteneurisé.
 
@@ -33,9 +36,11 @@ Si ces commandes fonctionnent, vous êtes prêt ! 🚀
 ### **Étape 1 : Cloner le projet** (30 secondes)
 
 ```bash
-git clone https://github.com/votre-username/Datalake_Instagram_Following_Surveillance.git
+git clone https://github.com/YOUR_USERNAME/Datalake_Instagram_Following_Surveillance.git
 cd Datalake_Instagram_Following_Surveillance
 ```
+
+> **Note** : Remplacez `YOUR_USERNAME` par le nom d'utilisateur GitHub approprié.
 
 ---
 
@@ -460,6 +465,29 @@ make logs               # Debug
 
 ---
 
+## 📚 Ressources supplémentaires
+
+- **Documentation complète** : [README.md](README.md)
+- **Commandes Make** : `make help`
+- **Issues & Support** : [GitHub Issues](https://github.com/YOUR_USERNAME/Datalake_Instagram_Following_Surveillance/issues)
+
+---
+
+## ⚠️ Rappel important
+
+Ce projet est fourni **à des fins éducatives et de recherche uniquement**. Respectez :
+- Les [Conditions d'Utilisation d'Instagram](https://help.instagram.com/581066165581870)
+- Les lois sur la protection des données (RGPD)
+- La vie privée des utilisateurs
+
+**Ne scrapez que des comptes publics et limitez le nombre de requêtes.**
+
+---
+
 **Temps total d'installation** : **10 minutes** (dont 5-7 minutes de build Docker)
 
-**Prêt à surveiller Instagram comme un pro !** 🚀
+**Prêt à surveiller Instagram de manière professionnelle !** 🚀
+
+---
+
+**Dernière mise à jour** : Janvier 2025
