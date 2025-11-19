@@ -7,7 +7,7 @@ apache-airflow==2.10.3
 psycopg2-binary==2.9.10
 
 # Big Data Processing
-pyspark==4.0.1
+pyspark==3.5.7
 pandas==2.3.3
 
 # Web Scraping

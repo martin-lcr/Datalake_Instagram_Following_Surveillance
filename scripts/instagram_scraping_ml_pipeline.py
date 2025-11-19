@@ -9,6 +9,7 @@ import sys
 import re
 import json
 import time
+import random
 import glob
 import pandas as pd
 from datetime import datetime, timedelta
@@ -48,13 +49,13 @@ account = sys.argv[1]
 normalized_account = account.replace(".", "-").replace("_", "-")
 
 # Configuration scraping
-NUM_PASSES = 1  # 1 scraping par heure (24x par jour)
+NUM_PASSES = 3  # 3 passes de scraping pour récupérer plus de followings et éviter la détection
 COOKIES_FILE = "/opt/airflow/cookies/www.instagram.com_cookies.txt"
 SCRAPING_OUTPUT_DIR = f"/tmp/scraping_output_{normalized_account}"
 
 # Configuration stockage
 DATA_BASE_PATH = "/sources/instagram_surveillance/data"
-JARS_PATH = "/opt/airflow/jars/postgresql-42.2.27.jar,/opt/airflow/jars/elasticsearch-spark-30_2.13-8.11.0.jar"
+JARS_PATH = "/opt/airflow/jars/postgresql-42.2.27.jar,/opt/airflow/jars/elasticsearch-spark-30_2.12-8.11.0.jar"
 
 # Configuration base de données
 POSTGRES_HOST = os.getenv("POSTGRES_HOST", "postgres")  # Nom du service Docker
@@ -488,10 +489,10 @@ def scrape_multipass(username, num_passes, output_dir, cookies_file):
         with open(pass_file, 'w', encoding='utf-8') as f:
             json.dump(pass_data, f, indent=2, ensure_ascii=False)
 
-        # Pause entre les passes
+        # Pause aléatoire entre les passes pour éviter la détection
         if pass_num < num_passes:
-            wait_time = 45
-            print(f"\n⏳ Attente {wait_time}s avant la prochaine passe...")
+            wait_time = random.randint(60, 120)  # Entre 1 et 2 minutes
+            print(f"\n⏳ Attente {wait_time}s avant la prochaine passe (délai aléatoire pour éviter détection)...")
             time.sleep(wait_time)
 
     # Résultats finaux

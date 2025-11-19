@@ -178,6 +178,7 @@ def api_followings(account_name):
         search = request.args.get('search', '')
         gender_filter = request.args.get('gender', '')
         status_filter = request.args.get('status', '')  # added/present/deleted
+        sort_filter = request.args.get('sort', 'username_asc')  # tri
 
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
@@ -220,7 +221,18 @@ def api_followings(account_name):
                 query += " AND c.action_type = %s"
                 params.append(status_filter)
 
-        query += " ORDER BY f.username LIMIT %s OFFSET %s"
+        # Gestion du tri
+        order_by_clauses = {
+            'username_asc': 'f.username ASC',
+            'username_desc': 'f.username DESC',
+            'date_desc': 'f.scraping_date DESC',
+            'date_asc': 'f.scraping_date ASC',
+            'confidence_desc': 'f.confidence DESC',
+            'confidence_asc': 'f.confidence ASC'
+        }
+        order_by = order_by_clauses.get(sort_filter, 'f.username ASC')
+
+        query += f" ORDER BY {order_by} LIMIT %s OFFSET %s"
         params.extend([per_page, offset])
 
         cursor.execute(query, params)
@@ -239,6 +251,13 @@ def api_followings(account_name):
         ) c ON f.target_account = c.target_account AND f.username = c.username
         WHERE {' AND '.join(where_clauses)}
         """
+
+        # Add status filter to count query as well
+        if status_filter:
+            if status_filter == 'present':
+                count_query += " AND COALESCE(c.action_type, 'present') = 'present'"
+            else:
+                count_query += " AND c.action_type = %s"
 
         cursor.execute(count_query, params[:-2])  # Sans LIMIT et OFFSET
         total = cursor.fetchone()['total']

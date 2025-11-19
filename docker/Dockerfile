@@ -46,8 +46,8 @@ RUN apt-get update && \
 RUN mkdir -p /opt/airflow/jars && \
     wget -q https://jdbc.postgresql.org/download/postgresql-42.2.27.jar \
         -O /opt/airflow/jars/postgresql-42.2.27.jar && \
-    wget -q https://repo1.maven.org/maven2/org/elasticsearch/elasticsearch-spark-30_2.13/8.11.0/elasticsearch-spark-30_2.13-8.11.0.jar \
-        -O /opt/airflow/jars/elasticsearch-spark-30_2.13-8.11.0.jar && \
+    wget -q https://repo1.maven.org/maven2/org/elasticsearch/elasticsearch-spark-30_2.12/8.11.0/elasticsearch-spark-30_2.12-8.11.0.jar \
+        -O /opt/airflow/jars/elasticsearch-spark-30_2.12-8.11.0.jar && \
     ls -lh /opt/airflow/jars/
 
 # ==============================================================================

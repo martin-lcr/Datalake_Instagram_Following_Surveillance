@@ -19,7 +19,7 @@ SCRIPTS_DIR = os.path.join(BASE_DIR, "scripts")
 ACCOUNTS_FILE = os.path.join(BASE_DIR, "instagram_accounts_to_scrape.txt")  # Fichier à la racine
 UNIFIED_SCRIPT = os.path.join(SCRIPTS_DIR, "instagram_scraping_ml_pipeline.py")
 JARS_PATH = "/opt/airflow/jars/postgresql-42.2.27.jar"  # Jar PostgreSQL
-ES_SPARK_JAR = "/opt/airflow/jars/elasticsearch-spark-30_2.13-8.11.0.jar"  # Jar ES (Scala 2.13)
+ES_SPARK_JAR = "/opt/airflow/jars/elasticsearch-spark-30_2.12-8.11.0.jar"  # Jar ES (Scala 2.12)
 DATA_DIR = os.path.join(BASE_DIR, "data")  # Répertoire de données
 
 # Configuration base de données (Docker-compatible)
@@ -55,8 +55,8 @@ default_args = {
 dag = DAG(
     'instagram_scraping_surveillance_pipeline',
     default_args=default_args,
-    description='Pipeline de surveillance Instagram horaire (24x/jour) + agrégation quotidienne à 23h',
-    schedule_interval='@hourly',  # Exécution toutes les heures (24x/jour) en heure locale (Europe/Paris)
+    description='Pipeline de surveillance Instagram ~4h (6x/jour) avec 3 passes + délais aléatoires + agrégation à 23h',
+    schedule_interval='0 2,6,10,14,18,23 * * *',  # Déclenchement à 2h, 6h, 10h, 14h, 18h, 23h puis délai aléatoire pour variation quotidienne
     catchup=False,
     tags=['instagram', 'scraping', 'ml', 'surveillance']
 )
@@ -109,10 +109,23 @@ def run_single_account_scraping(account_info: dict):
     """
     Exécute le script unifié de scraping pour un compte Instagram.
     Le script intègre : scraping multi-passes + ML + stockage multi-couches.
+
+    ⚠️ Délai aléatoire de 0-45min ajouté au démarrage pour éviter la détection Instagram
     """
     import sys
+    import time
+    import random
 
     account = account_info['account']
+
+    # Délai aléatoire de 0 à 45 minutes pour éviter détection Instagram
+    random_delay_seconds = random.randint(0, 45 * 60)  # 0 à 2700 secondes (45 minutes)
+    random_delay_minutes = random_delay_seconds // 60
+    random_delay_remaining = random_delay_seconds % 60
+
+    print(f"⏰ [Anti-détection] Délai aléatoire appliqué : {random_delay_minutes}min {random_delay_remaining}s")
+    print(f"⏰ [Anti-détection] Démarrage réel prévu à : {datetime.now() + timedelta(seconds=random_delay_seconds)}")
+    time.sleep(random_delay_seconds)
 
     print(f"🌀 [run_single_account_scraping] Démarrage scraping pour @{account}...")
 
@@ -172,10 +185,17 @@ def aggregate_results(**kwargs):
     from pyspark.sql import SparkSession
     from pyspark.sql.functions import lit
 
-    # Vérification horaire : ne s'exécute qu'à 23h00
-    current_hour = datetime.now().strftime("%H")
-    if current_hour != "23":
-        print(f"⏭️ [aggregate_results] Heure actuelle : {current_hour}h - Agrégation uniquement à 23h00")
+    # Vérification horaire : utiliser l'heure de déclenchement PRÉVUE, pas l'heure actuelle
+    # (important car le scraping peut avoir un délai aléatoire de 0-45min)
+    ti = kwargs['ti']
+    execution_date = kwargs['execution_date']
+    scheduled_hour = execution_date.hour
+
+    print(f"⏰ [aggregate_results] Heure de déclenchement prévue : {scheduled_hour}h")
+    print(f"⏰ [aggregate_results] Heure actuelle : {datetime.now().strftime('%H:%M:%S')}")
+
+    if scheduled_hour != 23:
+        print(f"⏭️ [aggregate_results] Agrégation uniquement pour l'exécution de 23h00")
         print(f"⏭️ [aggregate_results] Tâche skippée")
         return
 
@@ -350,10 +370,16 @@ def index_to_elasticsearch(**kwargs):
     from pyspark.sql.functions import lit
     from datetime import datetime
 
-    # Vérification horaire : ne s'exécute qu'à 23h00
-    current_hour = datetime.now().strftime("%H")
-    if current_hour != "23":
-        print(f"⏭️ [index_to_elasticsearch] Heure actuelle : {current_hour}h - Indexation uniquement à 23h00")
+    # Vérification horaire : utiliser l'heure de déclenchement PRÉVUE, pas l'heure actuelle
+    # (important car le scraping peut avoir un délai aléatoire de 0-45min)
+    execution_date = kwargs['execution_date']
+    scheduled_hour = execution_date.hour
+
+    print(f"⏰ [index_to_elasticsearch] Heure de déclenchement prévue : {scheduled_hour}h")
+    print(f"⏰ [index_to_elasticsearch] Heure actuelle : {datetime.now().strftime('%H:%M:%S')}")
+
+    if scheduled_hour != 23:
+        print(f"⏭️ [index_to_elasticsearch] Indexation uniquement pour l'exécution de 23h00")
         print(f"⏭️ [index_to_elasticsearch] Tâche skippée")
         return
 
