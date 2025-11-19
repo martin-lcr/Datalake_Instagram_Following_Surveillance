@@ -12,12 +12,13 @@
 Ce projet permet de surveiller automatiquement les abonnements (followings) de comptes Instagram publics. Il détecte les nouveaux followings et unfollows, prédit le genre via Machine Learning, et stocke tout l'historique dans un Data Lake structuré.
 
 **Caractéristiques principales** :
-- 🔄 Scraping automatique horaire (24 fois/jour)
-- 📊 Dashboard web moderne (port 8000)
-- 🤖 Prédiction de genre par ML
-- 📈 Visualisations Kibana avancées
+- 🔄 Scraping automatique toutes les ~4h (6 fois/jour) avec délais aléatoires anti-détection
+- 📊 Dashboard web moderne avec filtres avancés (port 8000)
+- 🤖 Prédiction de genre par ML avec % de confiance
+- 📈 Visualisations Kibana avancées (port 5601)
 - 💾 Data Lake structuré (RAW → FORMATTED → USAGE)
-- 🐳 100% Dockerisé (aucune installation Python requise)
+- 🐳 100% Dockerisé - Automatisation complète 24/7
+- 🛡️ Stratégie anti-détection Instagram (intervalles irréguliers, délais aléatoires)
 
 ---
 
@@ -99,24 +100,35 @@ Ou accédez manuellement :
 make open  # Ouvre les 3 dashboards dans le navigateur
 ```
 
-**C'est terminé !** 🎉 Le pipeline se lance automatiquement toutes les heures.
+**C'est terminé !** 🎉 Le pipeline tourne maintenant automatiquement 24/7.
+
+**📍 Important** : Tant que Docker Desktop est lancé, le système est 100% autonome :
+- ✅ Scrapings automatiques 6 fois/jour (2h, 6h, 10h, 14h, 18h, 23h + délais aléatoires 0-45min)
+- ✅ Agrégation et comparaison quotidienne à 23h
+- ✅ Pas besoin de garder VS Code ou Chrome ouverts
+- ✅ Redémarrage automatique des services (restart: always)
+- ⚠️ Cookies Instagram à renouveler tous les 1-3 mois (vous recevrez des erreurs dans les logs)
 
 ---
 
 ## 📋 Fonctionnalités
 
 ### Scraping et surveillance
-- ✅ **Scraping automatique** toutes les heures (24 fois/jour)
+- ✅ **Scraping automatique** 6 fois/jour (2h, 6h, 10h, 14h, 18h, 23h)
+- ✅ **Anti-détection Instagram** : Délais aléatoires 0-45min + 3 passes par scraping
 - ✅ **Multi-comptes** : Surveillez autant de comptes que vous voulez
-- ✅ **Détection des changements** : Nouveaux followings et unfollows
+- ✅ **Détection des changements** : Nouveaux followings et unfollows (comparaison quotidienne à 23h)
 - ✅ **Prédiction de genre** : ML automatique (male/female/unknown avec % de confiance)
 - ✅ **Historique complet** : Tous les scrapings sont conservés
+- ✅ **Fonctionnement 24/7** : Autonomie totale tant que Docker Desktop tourne
 
 ### Dashboards et visualisations
 - 📊 **Dashboard Web moderne** (port 8000) :
   - Vue globale : Tous vos comptes surveillés en un coup d'œil
-  - Vue détaillée : Liste complète avec filtres (recherche, genre, statut)
-  - Stats en temps réel : Total, ajouts/suppressions du jour, distribution genre
+  - Vue détaillée : Liste complète avec filtres avancés (recherche, genre, statut, tri)
+  - Stats quotidiennes : Total, ajouts/suppressions, distribution genre
+  - **Mise à jour quotidienne à 23h** (affiche le snapshot quotidien après agrégation)
+  - Affichage de la date de scraping pour chaque following
 
 - 📈 **Kibana** (port 5601) :
   - Visualisations avancées
@@ -196,39 +208,115 @@ make validate-cookies
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│            AIRFLOW SCHEDULER (Europe/Paris)              │
-│         Exécution automatique toutes les heures          │
+│         AIRFLOW SCHEDULER (Europe/Paris) 24/7            │
+│     6 exécutions/jour : 2h, 6h, 10h, 14h, 18h, 23h       │
+│           + Délai aléatoire 0-45min (anti-détection)     │
 └──────────────────────────────────────────────────────────┘
                           │
                           ▼
 ┌──────────────────────────────────────────────────────────┐
-│  ÉTAPE 1-6 : SCRAPING HORAIRE (Selenium + Chrome)       │
-│  • Extraction des followings Instagram                  │
-│  • Prédiction de genre (ML)                              │
-│  • Stockage Data Lake (RAW → FORMATTED → USAGE)         │
+│  SCRAPINGS ~4h (Selenium Chrome headless)                │
+│  • 3 passes par scraping (avec délais 60-120s)          │
+│  • Extraction followings Instagram                       │
+│  • Prédiction genre ML (confidence %)                    │
+│  • Stockage tables individuelles PostgreSQL              │
 └──────────────────────────────────────────────────────────┘
                           │
                           ▼
 ┌──────────────────────────────────────────────────────────┐
-│  ÉTAPE 7 : AGRÉGATION QUOTIDIENNE (23h00)               │
-│  • Fusion des 24 scrapings horaires                     │
-│  • Déduplication par username                            │
+│  AGRÉGATION QUOTIDIENNE (23h uniquement)                 │
+│  • Fusion des 6 scrapings de la journée                 │
+│  • Déduplication par username (DISTINCT ON)             │
+│  • → final_aggregated_scraping                          │
 └──────────────────────────────────────────────────────────┘
                           │
                           ▼
 ┌──────────────────────────────────────────────────────────┐
-│  ÉTAPE 8 : COMPARAISON J vs J-1 (23h00)                 │
+│  COMPARAISON J vs J-1 (23h uniquement)                   │
 │  • Détection nouveaux followings (added)                │
 │  • Détection unfollows (deleted)                         │
+│  • → final_comparatif_scraping                          │
 └──────────────────────────────────────────────────────────┘
                           │
            ┌──────────────┼──────────────┐
            ▼              ▼              ▼
     ┌──────────┐   ┌─────────────┐   ┌──────────┐
     │PostgreSQL│   │Elasticsearch│   │ Dashboard│
-    │  (SQL)   │   │  (Search)   │   │  (Web)   │
+    │  (Vues)  │   │  (Index)    │   │ (Flask)  │
+    │Màj 23h   │   │  Màj 23h    │   │ Màj 23h  │
     └──────────┘   └─────────────┘   └──────────┘
 ```
+
+---
+
+## 🤖 Fonctionnement Automatique 24/7
+
+### ✅ Autonomie Totale
+
+Une fois Docker Desktop lancé, **le système tourne entièrement en autonomie** :
+
+- **Pas besoin de VS Code ouvert** - Les containers tournent en arrière-plan
+- **Pas besoin de Chrome ouvert** - Les dashboards sont accessibles quand vous voulez
+- **Pas besoin de votre session utilisateur** - Les services sont gérés par Docker
+- **Redémarrage automatique** - Tous les services ont `restart: always`
+
+### 🔄 Planning Automatique
+
+| Heure | Action | Détails |
+|-------|--------|---------|
+| **02:00** + 0-45min | 🔍 Scraping | 3 passes + délais aléatoires 60-120s |
+| **06:00** + 0-45min | 🔍 Scraping | 3 passes + délais aléatoires 60-120s |
+| **10:00** + 0-45min | 🔍 Scraping | 3 passes + délais aléatoires 60-120s |
+| **14:00** + 0-45min | 🔍 Scraping | 3 passes + délais aléatoires 60-120s |
+| **18:00** + 0-45min | 🔍 Scraping | 3 passes + délais aléatoires 60-120s |
+| **23:00** + 0-45min | 🔍 Scraping + 📊 **Agrégation** + 🔄 **Comparaison** | Mise à jour dashboard |
+
+**Tous les horaires sont en heure locale (Europe/Paris)**
+
+### 📊 Mises à Jour du Dashboard
+
+Le dashboard (http://localhost:8000) **se met à jour une fois par jour à 23h** :
+
+**Pourquoi** ?
+- Les scrapings de 2h, 6h, 10h, 14h, 18h stockent dans des tables individuelles
+- L'agrégation de 23h fusionne tous les scrapings du jour
+- Les vues PostgreSQL lisent depuis les tables agrégées
+- **Résultat** : Le dashboard affiche un snapshot quotidien consolidé
+
+**Avantages** :
+- ✅ Données déduplicées et nettoyées
+- ✅ Comparaison précise J vs J-1
+- ✅ Moins de charge sur la base de données
+- ✅ Cohérence des données affichées
+
+### ⚠️ Maintenance Nécessaire
+
+**Seule intervention requise** : Renouveler les cookies Instagram tous les **1-3 mois**
+
+**Comment savoir que les cookies ont expiré** ?
+```bash
+make logs-airflow
+# Vous verrez : ❌ [ERREUR] Authentification Instagram échouée
+```
+
+**Solution** :
+1. Reconnectez-vous à Instagram dans Chrome
+2. Téléchargez les nouveaux cookies (extension Get cookies.txt LOCALLY)
+3. Remplacez `docker/cookies/www.instagram.com_cookies.txt`
+4. Redémarrez : `make restart`
+
+### 🔒 Stratégie Anti-Détection Instagram
+
+Pour éviter que Instagram détecte le scraping automatique :
+
+1. **Fréquence réduite** : 6x/jour au lieu de 24x/jour
+2. **Intervalles irréguliers** : 3h, 4h, 4h, 4h, 4h, 5h (non prévisible)
+3. **Délais aléatoires au démarrage** : 0-45 minutes (exécution jamais à heure fixe)
+4. **Multi-passes** : 3 passes par scraping (comportement plus humain)
+5. **Délais entre passes** : 60-120 secondes aléatoires
+6. **Cookies persistants** : Même session Instagram réutilisée
+
+**Résultat** : Pattern de scraping imprévisible et similaire au comportement humain
 
 ---
 
@@ -248,8 +336,8 @@ make validate-cookies
 
 ### Timezone
 Le pipeline fonctionne en **Europe/Paris (UTC+1)** :
-- Scraping horaire : 00h00 à 23h00 (heure de Paris)
-- Agrégation quotidienne : 23h00 (heure de Paris)
+- Scrapings : 02h00, 06h00, 10h00, 14h00, 18h00, 23h00 (+ délai aléatoire 0-45min)
+- Agrégation quotidienne : 23h00 uniquement
 - Le changement d'heure été/hiver est automatique
 
 ### Ports utilisés
