@@ -44,19 +44,21 @@ OLD_PARQUET_PATH = os.path.join(
     "final_aggregated.parquet"
 )
 
+# Timezone Europe/Paris pour que le schedule soit en heure locale
+local_tz = pendulum.timezone("Europe/Paris")
+
 default_args = {
     'owner': 'instagram_surveillance',
-    'start_date': days_ago(1),
+    'start_date': pendulum.datetime(2025, 1, 1, tz=local_tz),  # Timezone explicite pour schedule en heure Paris
     'retries': 1,
     'retry_delay': timedelta(minutes=5),
 }
 
-# Note: Le timezone Europe/Paris est configuré via AIRFLOW__CORE__DEFAULT_TIMEZONE dans docker-compose.yml
 dag = DAG(
     'instagram_scraping_surveillance_pipeline',
     default_args=default_args,
     description='Pipeline de surveillance Instagram ~4h (6x/jour) avec 3 passes + délais aléatoires + agrégation à 23h',
-    schedule_interval='0 2,6,10,14,18,23 * * *',  # Déclenchement à 2h, 6h, 10h, 14h, 18h, 23h puis délai aléatoire pour variation quotidienne
+    schedule_interval='0 2,6,10,14,18,23 * * *',  # Heures en timezone Europe/Paris (2h, 6h, 10h, 14h, 18h, 23h Paris)
     catchup=False,
     tags=['instagram', 'scraping', 'ml', 'surveillance']
 )
@@ -185,13 +187,18 @@ def aggregate_results(**kwargs):
     from pyspark.sql import SparkSession
     from pyspark.sql.functions import lit
 
-    # Vérification horaire : utiliser l'heure de déclenchement PRÉVUE, pas l'heure actuelle
+    # Vérification horaire : utiliser l'heure de déclenchement PRÉVUE en timezone Europe/Paris
     # (important car le scraping peut avoir un délai aléatoire de 0-45min)
+    import pendulum
     ti = kwargs['ti']
     execution_date = kwargs['execution_date']
-    scheduled_hour = execution_date.hour
 
-    print(f"⏰ [aggregate_results] Heure de déclenchement prévue : {scheduled_hour}h")
+    # Convertir en timezone Europe/Paris pour avoir l'heure locale
+    paris_time = pendulum.instance(execution_date).in_timezone('Europe/Paris')
+    scheduled_hour = paris_time.hour
+
+    print(f"⏰ [aggregate_results] Heure de déclenchement prévue : {scheduled_hour}h (Paris)")
+    print(f"⏰ [aggregate_results] execution_date UTC : {execution_date}")
     print(f"⏰ [aggregate_results] Heure actuelle : {datetime.now().strftime('%H:%M:%S')}")
 
     if scheduled_hour != 23:
@@ -370,12 +377,17 @@ def index_to_elasticsearch(**kwargs):
     from pyspark.sql.functions import lit
     from datetime import datetime
 
-    # Vérification horaire : utiliser l'heure de déclenchement PRÉVUE, pas l'heure actuelle
+    # Vérification horaire : utiliser l'heure de déclenchement PRÉVUE en timezone Europe/Paris
     # (important car le scraping peut avoir un délai aléatoire de 0-45min)
+    import pendulum
     execution_date = kwargs['execution_date']
-    scheduled_hour = execution_date.hour
 
-    print(f"⏰ [index_to_elasticsearch] Heure de déclenchement prévue : {scheduled_hour}h")
+    # Convertir en timezone Europe/Paris pour avoir l'heure locale
+    paris_time = pendulum.instance(execution_date).in_timezone('Europe/Paris')
+    scheduled_hour = paris_time.hour
+
+    print(f"⏰ [index_to_elasticsearch] Heure de déclenchement prévue : {scheduled_hour}h (Paris)")
+    print(f"⏰ [index_to_elasticsearch] execution_date UTC : {execution_date}")
     print(f"⏰ [index_to_elasticsearch] Heure actuelle : {datetime.now().strftime('%H:%M:%S')}")
 
     if scheduled_hour != 23:
