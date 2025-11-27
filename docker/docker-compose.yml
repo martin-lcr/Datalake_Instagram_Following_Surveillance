@@ -1,5 +1,3 @@
-version: '3.8'
-
 x-airflow-common:
   &airflow-common
   build:
@@ -12,6 +10,7 @@ x-airflow-common:
     AIRFLOW__CORE__DEFAULT_TIMEZONE: Europe/Paris
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
     AIRFLOW__WEBSERVER__SECRET_KEY: '${AIRFLOW_SECRET_KEY:-please-change-this-secret-key-in-production}'
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
     # Mode visuel pour Chrome (défaut: false)
     VISUAL_MODE: '${VISUAL_MODE:-false}'
     DISPLAY: '${DISPLAY:-:0}'
@@ -152,8 +151,13 @@ services:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
       FLASK_SECRET_KEY: ${AIRFLOW_SECRET_KEY:-dev-secret-key}
+      AIRFLOW_USER: airflow
+      AIRFLOW_PASSWORD: airflow
     ports:
       - "8000:8000"
+    volumes:
+      - ../instagram_accounts_to_scrape.txt:/app/instagram_accounts_to_scrape.txt
+      - ../docker/.env:/app/docker/.env
     depends_on:
       postgres:
         condition: service_healthy
