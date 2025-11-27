@@ -303,6 +303,7 @@ def api_accounts():
             account_name = table_name.replace('instagram_data_', '')
 
             # Utiliser le système de fusion intelligente pour obtenir les stats
+            # (la normalisation sera faite à l'intérieur du helper)
             stats = get_smart_unified_stats_for_account(DB_CONFIG, account_name, selected_date)
 
             # Récupérer la date du dernier scraping

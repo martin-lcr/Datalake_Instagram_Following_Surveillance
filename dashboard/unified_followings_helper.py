@@ -68,7 +68,7 @@ def get_unified_followings_for_account(db_config, account_name, date=None):
               AND instagram_reported_total IS NOT NULL
             ORDER BY scraping_timestamp DESC
             LIMIT 1
-        """, (account_name, date))
+        """, (normalized_account, date))
 
         result = cursor.fetchone()
         instagram_reported = result['instagram_reported_total'] if result else None
@@ -87,7 +87,7 @@ def get_unified_followings_for_account(db_config, account_name, date=None):
                     AND ABS(EXTRACT(EPOCH FROM (sm.scraping_timestamp - f.scraped_at::timestamp))) < 120
                     AND sm.completeness_score >= 50.0
               )
-        """.format(table_name), (date, account_name, date))
+        """.format(table_name), (date, normalized_account, date))
 
         scrapings_used = cursor.fetchone()['count']
 
@@ -209,6 +209,9 @@ def get_smart_unified_followings(db_config, account_name, date=None, max_age_hou
     if date is None:
         date = datetime.now().strftime('%Y-%m-%d')
 
+    # Normaliser le nom du compte pour les requêtes metadata (même logique que le script de scraping)
+    normalized_account = account_name.replace(".", "-").replace("_", "-")
+
     conn = None
     try:
         conn = psycopg2.connect(**db_config)
@@ -245,7 +248,7 @@ def get_smart_unified_followings(db_config, account_name, date=None, max_age_hou
               AND instagram_reported_total IS NOT NULL
             ORDER BY scraping_timestamp DESC
             LIMIT 1
-        """, (account_name, date))
+        """, (normalized_account, date))
 
         result = cursor.fetchone()
         instagram_reported = result['instagram_reported_total'] if result else None
@@ -266,7 +269,7 @@ def get_smart_unified_followings(db_config, account_name, date=None, max_age_hou
               AND sm.scraping_timestamp >= %s
             ORDER BY sm.completeness_score DESC, sm.scraping_timestamp DESC
             LIMIT 1
-        """, (account_name, date, cutoff_time))
+        """, (normalized_account, date, cutoff_time))
 
         base_scraping_meta = cursor.fetchone()
 
@@ -284,7 +287,7 @@ def get_smart_unified_followings(db_config, account_name, date=None, max_age_hou
                   AND sm.completeness_score >= 50.0
                 ORDER BY sm.completeness_score DESC, sm.scraping_timestamp DESC
                 LIMIT 1
-            """, (account_name, date))
+            """, (normalized_account, date))
             base_scraping_meta = cursor.fetchone()
 
         if not base_scraping_meta:
@@ -344,7 +347,7 @@ def get_smart_unified_followings(db_config, account_name, date=None, max_age_hou
                   )
                 GROUP BY f.username
                 ORDER BY appearances DESC, f.username
-            """.format(table_name), (date, base_timestamp, account_name, date))
+            """.format(table_name), (date, base_timestamp, normalized_account, date))
 
             other_followings = cursor.fetchall()
 
