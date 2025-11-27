@@ -127,8 +127,125 @@
                 </div>
             </div>
 
-            <!-- Liste des followings -->
-            <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+            <!-- Qualité du scraping -->
+            <div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg shadow-lg p-5 mb-6 border border-indigo-200">
+                <h3 class="text-lg font-bold text-indigo-900 mb-4 flex items-center gap-2">
+                    <i class="fas fa-chart-line"></i>
+                    Qualité du dernier scraping
+                </h3>
+
+                <div x-show="!qualityData" class="text-center py-4">
+                    <i class="fas fa-spinner fa-spin text-2xl text-indigo-600"></i>
+                </div>
+
+                <div x-show="qualityData" class="space-y-4">
+                    <!-- Première ligne : 4 métriques -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <!-- Score de complétude -->
+                        <div class="bg-white rounded-lg p-4 shadow-sm">
+                            <p class="text-xs text-gray-600 mb-1 flex items-center gap-1">
+                                <i class="fas fa-percentage text-indigo-600"></i>
+                                Score de complétude
+                            </p>
+                            <p class="text-xl font-bold"
+                               :class="qualityData && parseFloat(qualityData.dynamic_completeness_score) >= 95 ? 'text-green-600' :
+                                       qualityData && parseFloat(qualityData.dynamic_completeness_score) >= 80 ? 'text-yellow-600' : 'text-red-600'"
+                               x-text="qualityData ? qualityData.dynamic_completeness_score + '%' : 'N/A'">
+                            </p>
+                        </div>
+
+                        <!-- Statut -->
+                        <div class="bg-white rounded-lg p-4 shadow-sm">
+                            <p class="text-xs text-gray-600 mb-1 flex items-center gap-1">
+                                <i class="fas fa-check-circle text-indigo-600"></i>
+                                Statut
+                            </p>
+                            <p class="text-xl font-bold"
+                               :class="qualityData && qualityData.is_complete ? 'text-green-600' : 'text-orange-600'"
+                               x-text="qualityData ? (qualityData.is_complete ? 'Complet' : 'Incomplet') : 'N/A'">
+                            </p>
+                        </div>
+
+                        <!-- Durée -->
+                        <div class="bg-white rounded-lg p-4 shadow-sm">
+                            <p class="text-xs text-gray-600 mb-1 flex items-center gap-1">
+                                <i class="fas fa-clock text-indigo-600"></i>
+                                Durée
+                            </p>
+                            <p class="text-xl font-bold text-indigo-600"
+                               x-text="qualityData && qualityData.scraping_duration_seconds ?
+                                       Math.floor(qualityData.scraping_duration_seconds / 60) + 'm ' +
+                                       (qualityData.scraping_duration_seconds % 60) + 's' : 'N/A'">
+                            </p>
+                        </div>
+
+                        <!-- Meilleur scraping individuel -->
+                        <div class="bg-white rounded-lg p-4 shadow-sm">
+                            <p class="text-xs text-gray-600 mb-1 flex items-center gap-1">
+                                <i class="fas fa-layer-group text-indigo-600"></i>
+                                Meilleur scraping
+                            </p>
+                            <p class="text-xl font-bold text-indigo-600"
+                               x-text="qualityData ? qualityData.total_followings : 'N/A'">
+                            </p>
+                            <p class="text-xs text-gray-500 mt-1"
+                               x-show="qualityData && qualityData.scraping_timestamp"
+                               x-text="qualityData ? qualityData.scraping_timestamp : ''">
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Deuxième ligne : Total combiné (highlight) -->
+                    <div class="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg p-4 border-2 border-purple-200">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-layer-group text-purple-600 text-xl"></i>
+                                <div>
+                                    <p class="text-sm font-semibold text-purple-900">Total followings uniques combinés</p>
+                                    <p class="text-xs text-purple-600">Tous les scrapings du jour fusionnés (multi-pass)</p>
+                                </div>
+                            </div>
+                            <p class="text-3xl font-bold text-purple-600" x-text="qualityData && qualityData.combined_total ? qualityData.combined_total : (pagination.total || 'N/A')"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notes (si présentes) -->
+                <div x-show="qualityData && qualityData.notes" class="mt-4 bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
+                    <p class="text-xs text-yellow-800 flex items-center gap-2">
+                        <i class="fas fa-info-circle"></i>
+                        <span x-text="qualityData ? qualityData.notes : ''"></span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Onglets -->
+            <div class="mb-6">
+                <div class="border-b border-gray-200">
+                    <nav class="-mb-px flex space-x-8">
+                        <button @click="activeTab = 'followings'; loadFollowings()"
+                                :class="activeTab === 'followings' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
+                            <i class="fas fa-users mr-2"></i>Followings
+                        </button>
+                        <button @click="activeTab = 'added_details'; loadDayToDayChanges('added')"
+                                :class="activeTab === 'added_details' ? 'border-green-500 text-green-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
+                            <i class="fas fa-plus-circle mr-2"></i>Ajoutés - détails
+                            <span x-show="dayToDayStats.added > 0" class="ml-2 bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs" x-text="dayToDayStats.added"></span>
+                        </button>
+                        <button @click="activeTab = 'deleted_details'; loadDayToDayChanges('deleted')"
+                                :class="activeTab === 'deleted_details' ? 'border-red-500 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
+                            <i class="fas fa-minus-circle mr-2"></i>Supprimés - détails
+                            <span x-show="dayToDayStats.deleted > 0" class="ml-2 bg-red-100 text-red-800 px-2 py-0.5 rounded-full text-xs" x-text="dayToDayStats.deleted"></span>
+                        </button>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Onglet Followings -->
+            <div x-show="activeTab === 'followings'" class="bg-white rounded-lg shadow-lg overflow-hidden">
                 <div class="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
                     <h2 class="text-lg font-bold text-gray-900 flex items-center gap-2">
                         <i class="fas fa-users"></i>
@@ -150,7 +267,7 @@
                 </div>
 
                 <div x-show="!loading && followings.length > 0" class="divide-y divide-gray-100">
-                    <template x-for="(following, index) in followings" :key="following.username">
+                    <template x-for="(following, index) in followings" :key="index">
                         <div class="p-2 hover:bg-gray-50 transition-colors"
                              :class="{'bg-green-50': following.status === 'added', 'bg-red-50': following.status === 'deleted'}">
                             <div class="flex items-center justify-between">
@@ -231,6 +348,134 @@
                 </div>
 
             </div>
+
+            <!-- Onglet Ajoutés - détails (jour-à-jour) -->
+            <div x-show="activeTab === 'added_details'" class="bg-white rounded-lg shadow-lg overflow-hidden">
+                <div class="bg-gradient-to-r from-green-50 to-green-100 px-6 py-4 border-b border-green-200">
+                    <h2 class="text-lg font-bold text-green-800 flex items-center gap-2">
+                        <i class="fas fa-plus-circle"></i>
+                        Ajoutés - Comparaison jour-à-jour
+                        <span class="text-sm font-normal text-green-600" x-show="dayToDayChanges.length > 0">
+                            (<span x-text="dayToDayChanges.length"></span> followings)
+                        </span>
+                    </h2>
+                    <p class="text-sm text-green-600 mt-1">
+                        Followings présents aujourd'hui mais absents hier (réapparitions possibles)
+                    </p>
+                </div>
+
+                <div x-show="loadingDayToDay" class="p-12 text-center">
+                    <i class="fas fa-spinner fa-spin text-4xl text-green-600"></i>
+                    <p class="text-gray-600 mt-4">Chargement...</p>
+                </div>
+
+                <div x-show="!loadingDayToDay && dayToDayChanges.length === 0" class="p-12 text-center">
+                    <i class="fas fa-check-circle text-6xl text-gray-300"></i>
+                    <p class="text-gray-500 mt-4 text-lg">Aucun ajout jour-à-jour détecté</p>
+                </div>
+
+                <div x-show="!loadingDayToDay && dayToDayChanges.length > 0" class="divide-y divide-gray-100">
+                    <template x-for="(item, index) in dayToDayChanges" :key="index">
+                        <div class="p-3 hover:bg-green-50 transition-colors bg-green-50/50">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3 flex-1">
+                                    <div class="bg-gradient-to-br from-green-400 to-green-500 rounded-full w-10 h-10 flex items-center justify-center text-white font-bold text-sm">
+                                        <span x-text="item.username.charAt(0).toUpperCase()"></span>
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-2">
+                                            <a :href="'https://www.instagram.com/' + item.username"
+                                               target="_blank"
+                                               class="text-sm font-semibold text-gray-900 hover:text-green-600 transition-colors">
+                                                @<span x-text="item.username"></span>
+                                            </a>
+                                            <span class="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded">
+                                                <i class="fas fa-plus-circle"></i> Ajouté
+                                            </span>
+                                        </div>
+                                        <p class="text-gray-600 text-sm" x-text="item.full_name || 'N/A'"></p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-4">
+                                    <template x-if="item.predicted_gender === 'male'">
+                                        <i class="fas fa-mars text-blue-600 text-lg" title="Homme"></i>
+                                    </template>
+                                    <template x-if="item.predicted_gender === 'female'">
+                                        <i class="fas fa-venus text-pink-600 text-lg" title="Femme"></i>
+                                    </template>
+                                    <template x-if="item.predicted_gender === 'unknown'">
+                                        <i class="fas fa-question-circle text-gray-400 text-lg" title="Inconnu"></i>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Onglet Supprimés - détails (jour-à-jour) -->
+            <div x-show="activeTab === 'deleted_details'" class="bg-white rounded-lg shadow-lg overflow-hidden">
+                <div class="bg-gradient-to-r from-red-50 to-red-100 px-6 py-4 border-b border-red-200">
+                    <h2 class="text-lg font-bold text-red-800 flex items-center gap-2">
+                        <i class="fas fa-minus-circle"></i>
+                        Supprimés - Comparaison jour-à-jour
+                        <span class="text-sm font-normal text-red-600" x-show="dayToDayChanges.length > 0">
+                            (<span x-text="dayToDayChanges.length"></span> followings)
+                        </span>
+                    </h2>
+                    <p class="text-sm text-red-600 mt-1">
+                        Followings présents hier mais absents aujourd'hui (scraping incomplet possible)
+                    </p>
+                </div>
+
+                <div x-show="loadingDayToDay" class="p-12 text-center">
+                    <i class="fas fa-spinner fa-spin text-4xl text-red-600"></i>
+                    <p class="text-gray-600 mt-4">Chargement...</p>
+                </div>
+
+                <div x-show="!loadingDayToDay && dayToDayChanges.length === 0" class="p-12 text-center">
+                    <i class="fas fa-check-circle text-6xl text-gray-300"></i>
+                    <p class="text-gray-500 mt-4 text-lg">Aucune suppression jour-à-jour détectée</p>
+                </div>
+
+                <div x-show="!loadingDayToDay && dayToDayChanges.length > 0" class="divide-y divide-gray-100">
+                    <template x-for="(item, index) in dayToDayChanges" :key="index">
+                        <div class="p-3 hover:bg-red-50 transition-colors bg-red-50/50">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3 flex-1">
+                                    <div class="bg-gradient-to-br from-red-400 to-red-500 rounded-full w-10 h-10 flex items-center justify-center text-white font-bold text-sm">
+                                        <span x-text="item.username.charAt(0).toUpperCase()"></span>
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-2">
+                                            <a :href="'https://www.instagram.com/' + item.username"
+                                               target="_blank"
+                                               class="text-sm font-semibold text-gray-900 hover:text-red-600 transition-colors">
+                                                @<span x-text="item.username"></span>
+                                            </a>
+                                            <span class="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-semibold rounded">
+                                                <i class="fas fa-minus-circle"></i> Supprimé
+                                            </span>
+                                        </div>
+                                        <p class="text-gray-600 text-sm" x-text="item.full_name || 'N/A'"></p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-4">
+                                    <template x-if="item.predicted_gender === 'male'">
+                                        <i class="fas fa-mars text-blue-600 text-lg" title="Homme"></i>
+                                    </template>
+                                    <template x-if="item.predicted_gender === 'female'">
+                                        <i class="fas fa-venus text-pink-600 text-lg" title="Femme"></i>
+                                    </template>
+                                    <template x-if="item.predicted_gender === 'unknown'">
+                                        <i class="fas fa-question-circle text-gray-400 text-lg" title="Inconnu"></i>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -240,7 +485,14 @@
                 accountName: accountName,
                 followings: [],
                 loading: true,
+                loadingDayToDay: false,
                 lastUpdate: '',
+                activeTab: 'followings',
+                dayToDayChanges: [],
+                dayToDayStats: {
+                    added: 0,
+                    deleted: 0
+                },
                 filters: {
                     search: '',
                     gender: '',
@@ -258,10 +510,55 @@
                     female: 0,
                     unknown: 0
                 },
+                qualityData: null,
 
                 async init() {
                     await this.loadFollowings();
+                    await this.loadDayToDayStats();
+                    await this.loadQualityData();
                     this.lastUpdate = new Date().toLocaleString('fr-FR');
+                },
+
+                async loadDayToDayStats() {
+                    try {
+                        const response = await fetch(`/api/account/${this.accountName}/day-to-day-stats`);
+                        const data = await response.json();
+                        if (data.success) {
+                            this.dayToDayStats.added = data.added || 0;
+                            this.dayToDayStats.deleted = data.deleted || 0;
+                        }
+                    } catch (error) {
+                        console.error('Erreur chargement stats jour-à-jour:', error);
+                    }
+                },
+
+                async loadQualityData() {
+                    try {
+                        const response = await fetch(`/api/account/${this.accountName}/scraping-quality`);
+                        const data = await response.json();
+                        if (data.success && data.quality_history && data.quality_history.length > 0) {
+                            // Prendre le premier scraping COMPLET (is_complete = true)
+                            this.qualityData = data.quality_history.find(item => item.is_complete) || data.quality_history[0];
+                        }
+                    } catch (error) {
+                        console.error('Erreur chargement qualité:', error);
+                    }
+                },
+
+                async loadDayToDayChanges(action) {
+                    this.loadingDayToDay = true;
+                    this.dayToDayChanges = [];
+                    try {
+                        const response = await fetch(`/api/account/${this.accountName}/day-to-day-changes?action=${action}`);
+                        const data = await response.json();
+                        if (data.success) {
+                            this.dayToDayChanges = data.changes || [];
+                        }
+                    } catch (error) {
+                        console.error('Erreur chargement changements jour-à-jour:', error);
+                    } finally {
+                        this.loadingDayToDay = false;
+                    }
                 },
 
                 async loadFollowings() {

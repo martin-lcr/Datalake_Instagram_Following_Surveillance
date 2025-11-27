@@ -14,6 +14,7 @@ Ce projet permet de surveiller automatiquement les abonnements (followings) de c
 **Caractéristiques principales** :
 - 🔄 Scraping automatique toutes les ~4h (6 fois/jour) avec délais aléatoires anti-détection
 - 📊 Dashboard web moderne avec filtres avancés (port 8000)
+- 🖥️ Mode visuel optionnel pour voir Chrome naviguer en temps réel (X11/VNC)
 - 🤖 Prédiction de genre par ML avec % de confiance
 - 📈 Visualisations Kibana avancées (port 5601)
 - 💾 Data Lake structuré (RAW → FORMATTED → USAGE)
@@ -22,14 +23,25 @@ Ce projet permet de surveiller automatiquement les abonnements (followings) de c
 
 ---
 
-## ✨ Installation rapide (10 minutes)
+## ✨ Installation rapide
 
-### Prérequis
+### Option 1 : Installation locale (10 minutes)
 
+**Prérequis** :
 - ✅ **Docker Desktop** installé et lancé
 - ✅ **Git** installé
 
 **C'est tout !** Python, Make, Airflow, PostgreSQL, Elasticsearch sont tous conteneurisés.
+
+### Option 2 : Déploiement Cloud (20 minutes) ☁️
+
+**Déploiement gratuit 24/7 sur Oracle Cloud Free Tier** :
+- ✅ VM ARM 4 OCPU + 24 GB RAM (Always Free)
+- ✅ 200 GB Storage
+- ✅ IP publique statique
+- ✅ Disponibilité 24/7
+
+📖 **Guide complet** : [docs/DEPLOIEMENT_ORACLE_CLOUD.md](docs/DEPLOIEMENT_ORACLE_CLOUD.md)
 
 ### 1️⃣ Cloner le projet
 
@@ -127,6 +139,7 @@ make open  # Ouvre les 3 dashboards dans le navigateur
   - Vue globale : Tous vos comptes surveillés en un coup d'œil
   - Vue détaillée : Liste complète avec filtres avancés (recherche, genre, statut, tri)
   - Stats quotidiennes : Total, ajouts/suppressions, distribution genre
+  - **Qualité du scraping** : Score de complétude basé sur le nombre réel Instagram
   - **Mise à jour quotidienne à 23h** (affiche le snapshot quotidien après agrégation)
   - Affichage de la date de scraping pour chaque following
 
@@ -134,6 +147,14 @@ make open  # Ouvre les 3 dashboards dans le navigateur
   - Visualisations avancées
   - Graphiques de tendances
   - Recherche full-text
+
+### Quality Tracking (Suivi de qualité)
+- ✅ **Extraction automatique** : Récupération du nombre total réel depuis Instagram
+- ✅ **Score de complétude** : Calcul précis du % de couverture de chaque scraping
+- ✅ **Détection des vrais nouveaux** : Ignore les scrapings incomplets dans les comparaisons
+- ✅ **Niveau de confiance** : HIGH/MEDIUM/LOW selon la qualité des données
+- ✅ **Historique de qualité** : Traçabilité complète de tous les scrapings
+- ✅ **Robustesse** : Évite les faux positifs dus aux scrapings partiels
 
 ### Architecture Data Lake
 ```
@@ -182,6 +203,20 @@ make trigger-dag
 ```bash
 make validate-cookies
 ```
+
+### Mode Visuel (voir Chrome en action)
+Activez le mode visuel pour voir Chrome naviguer sur Instagram en temps réel :
+```bash
+# Via le Dashboard (recommandé)
+# 1. Aller sur http://localhost:8000
+# 2. Cliquer sur "Lancer scraping"
+# 3. Cocher "Mode visuel"
+
+# Ou en ligne de commande
+make test-visual-mode  # Tester l'affichage X11
+```
+
+📖 **Guide complet** : [docs/X11_VISUAL_MODE_SETUP.md](docs/X11_VISUAL_MODE_SETUP.md)
 
 ---
 
@@ -360,6 +395,30 @@ Puis redémarrez :
 make restart
 ```
 
+### Quality Tracking (Système de suivi de qualité)
+
+Le système de quality tracking est **déjà intégré** dans le pipeline et s'active automatiquement à chaque scraping.
+
+**Fonctionnalités automatiques** :
+- ✅ Extraction du nombre total réel depuis Instagram (valeur "357 suivi(e)s")
+- ✅ Calcul du score de complétude : `(scrapé / total_instagram) × 100`
+- ✅ Stockage dans `scraping_metadata` avec historique complet
+- ✅ Comparaisons intelligentes (ignore les scrapings incomplets)
+
+**Consultation** :
+- **Dashboard** : http://localhost:8000 → Section "Qualité du scraping"
+- **PostgreSQL** :
+  ```bash
+  docker exec -it instagram-postgres psql -U airflow -d airflow
+  ```
+  ```sql
+  SELECT * FROM scraping_metadata ORDER BY scraping_date DESC LIMIT 10;
+  ```
+
+**Documentation complète** :
+- [Guide d'intégration](docs/INTEGRATION_QUALITY_TRACKING.md) - Détails techniques
+- [Solution aux scrapings incomplets](docs/SOLUTION_SCRAPINGS_INCOMPLETS.md) - Problème résolu
+
 ---
 
 ## 🐛 Troubleshooting
@@ -467,12 +526,22 @@ make status
 │   ├── cookies/                 # Cookies Instagram (à placer ici)
 │   └── .env                     # Variables d'environnement
 ├── scripts/
-│   ├── instagram_scraping_ml_pipeline.py  # Script principal
-│   └── setup_auto_open.sh       # Configuration auto-open 09h00
+│   ├── instagram_scraping_ml_pipeline.py   # Script principal de scraping
+│   ├── scraping_quality_tracker.py         # Module de suivi de qualité
+│   ├── install_quality_tracking.sh         # Installation du quality tracking
+│   ├── install_oracle_cloud.sh             # Installation automatique Oracle Cloud
+│   └── setup_auto_open.sh                  # Configuration auto-open 09h00
 ├── data/                        # Data Lake (généré automatiquement)
 │   ├── raw/
 │   ├── formatted/
 │   └── usage/
+├── sql/                         # Scripts SQL pour quality tracking
+│   ├── create_scraping_metadata.sql      # Tables de métadonnées
+│   └── detect_truly_new_followings.sql   # Fonctions de détection
+├── docs/                        # Documentation technique
+│   ├── DEPLOIEMENT_ORACLE_CLOUD.md       # Guide déploiement Oracle Cloud
+│   ├── INTEGRATION_QUALITY_TRACKING.md   # Guide quality tracking
+│   └── SOLUTION_SCRAPINGS_INCOMPLETS.md  # Résolution problèmes
 ├── instagram_accounts_to_scrape.txt  # Liste des comptes à surveiller
 ├── Makefile                     # Commandes d'automatisation
 ├── README.md                    # Ce fichier
@@ -483,7 +552,15 @@ make status
 
 ## 📚 Documentation supplémentaire
 
-- **[QUICKSTART.md](QUICKSTART.md)** - Guide de démarrage ultra-rapide (3 minutes)
+### Guides d'installation
+- **[QUICKSTART.md](QUICKSTART.md)** - Guide de démarrage ultra-rapide (10 minutes)
+- **[Déploiement Oracle Cloud](docs/DEPLOIEMENT_ORACLE_CLOUD.md)** ☁️ - Déploiement gratuit 24/7 sur Oracle Cloud Free Tier
+
+### Guides techniques
+- **[Quality Tracking Integration](docs/INTEGRATION_QUALITY_TRACKING.md)** - Guide technique complet du système de suivi de qualité
+- **[Solution Scrapings Incomplets](docs/SOLUTION_SCRAPINGS_INCOMPLETS.md)** - Résolution du problème des scrapings partiels
+
+### Références
 - **Commandes Make** - `make help` pour la liste complète
 - **Airflow UI** - http://localhost:8082 (documentation intégrée)
 

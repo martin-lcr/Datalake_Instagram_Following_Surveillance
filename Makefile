@@ -53,6 +53,11 @@ help: ## Afficher l'aide
 	@echo "$(YELLOW)Commandes utilitaires:$(NC)"
 	@echo "  $(GREEN)make check-prereqs$(NC)    Vérifier les prérequis"
 	@echo "  $(GREEN)make setup$(NC)            Configuration initiale uniquement"
+	@echo "  $(GREEN)make setup-x11$(NC)        Configuration X11 (mode visuel)"
+	@echo "  $(GREEN)make setup-fusion-system$(NC) Installer système de fusion"
+	@echo "  $(GREEN)make setup-full$(NC)       Setup complet (base + X11)"
+	@echo "  $(GREEN)make verify$(NC)           Vérifier l'installation"
+	@echo "  $(GREEN)make test-visual-mode$(NC) Tester le mode visuel"
 	@echo "  $(GREEN)make urls$(NC)             Afficher les URLs d'accès"
 	@echo "  $(GREEN)make open$(NC)             Ouvrir les dashboards dans le navigateur"
 	@echo "  $(GREEN)make setup-auto-open$(NC)  Configurer auto-open à 09h00 (cron)"
@@ -127,14 +132,30 @@ setup: check-prereqs ## Configuration initiale du projet
 	@echo ""
 	@echo "$(GREEN)✅ Configuration initiale terminée automatiquement !$(NC)"
 	@echo ""
-	@echo "$(YELLOW)Il ne vous reste plus qu'à:$(NC)"
-	@echo "  1. Placer vos cookies Instagram dans $(BLUE)docker/cookies/www.instagram.com_cookies.txt$(NC)"
-	@echo "  2. Éditer $(BLUE)instagram_accounts_to_scrape.txt$(NC) pour ajouter les comptes à surveiller"
-	@echo "  3. Exécutez $(GREEN)make build$(NC) pour construire les images Docker"
-	@echo "  4. Exécutez $(GREEN)make start$(NC) pour démarrer les services"
-	@echo ""
-	@echo "$(BLUE)💡 Ou utilisez $(GREEN)make install$(NC) pour tout faire en une commande !$(NC)"
-	@echo ""
+
+setup-x11: ## Configuration X11 pour le mode visuel
+	@echo "$(BLUE)🖥️  Configuration X11 pour le mode visuel...$(NC)"
+	@if [ -f scripts/setup_x11_visual_mode.sh ]; then \
+		chmod +x scripts/setup_x11_visual_mode.sh; \
+		./scripts/setup_x11_visual_mode.sh; \
+	else \
+		echo "$(YELLOW)⚠️  Script X11 non trouvé, création...$(NC)"; \
+		echo "$(RED)❌ Erreur: Script manquant$(NC)"; \
+		exit 1; \
+	fi
+
+setup-fusion-system: ## Installation du système de fusion intelligente
+	@echo "$(BLUE)🔀 Installation du système de fusion intelligente...$(NC)"
+	@if [ -f scripts/install_unified_followings_system.sh ]; then \
+		chmod +x scripts/install_unified_followings_system.sh; \
+		./scripts/install_unified_followings_system.sh; \
+	else \
+		echo "$(YELLOW)⚠️  Script de fusion non trouvé$(NC)"; \
+		echo "$(BLUE)Installation manuelle depuis SQL...$(NC)"; \
+		docker exec -i instagram-postgres psql -U airflow -d airflow < sql/unified_followings_system.sql || true; \
+	fi
+
+setup-full: setup setup-x11 ## Configuration complète (base + X11)
 
 build: check-prereqs ## Construire les images Docker
 	@echo "$(BLUE)🔨 Construction des images Docker...$(NC)"
@@ -285,6 +306,8 @@ install: ## Installation complète (setup + build + start)
 	@echo ""
 	@make --no-print-directory setup
 	@echo ""
+	@make --no-print-directory setup-x11
+	@echo ""
 	@echo "$(YELLOW)⚠️  Avant de continuer, assurez-vous d'avoir:$(NC)"
 	@echo "  1. Édité $(BLUE)docker/.env$(NC) (AIRFLOW_UID, AIRFLOW_SECRET_KEY)"
 	@echo "  2. Ajouté les cookies dans $(BLUE)docker/cookies/www.instagram.com_cookies.txt$(NC)"
@@ -298,6 +321,13 @@ install: ## Installation complète (setup + build + start)
 	@make --no-print-directory validate-cookies
 	@echo ""
 	@make --no-print-directory up
+	@echo ""
+	@echo "$(BLUE)⏳ Attente du démarrage des services (30 secondes)...$(NC)"
+	@sleep 30
+	@echo ""
+	@make --no-print-directory setup-fusion-system
+	@echo ""
+	@make --no-print-directory verify
 	@echo ""
 	@echo "$(GREEN)╔════════════════════════════════════════════════════════════════╗$(NC)"
 	@echo "$(GREEN)║  ✅ Installation terminée avec succès !                        ║$(NC)"
@@ -322,6 +352,67 @@ dag-state: ## Afficher l'état du DAG
 setup-auto-open: ## Configurer l'ouverture automatique des dashboards à 09h00
 	@echo "$(BLUE)⏰ Configuration de l'ouverture automatique à 09h00...$(NC)"
 	@bash scripts/setup_auto_open.sh
+
+# =============================================================================
+# Tests et vérifications
+# =============================================================================
+
+verify: ## Vérifier que tous les services fonctionnent
+	@echo "$(BLUE)🔍 Vérification de l'installation...$(NC)"
+	@echo ""
+	@echo "$(YELLOW)[1/7]$(NC) Vérification PostgreSQL..."
+	@docker exec instagram-postgres pg_isready -U airflow > /dev/null 2>&1 && echo "$(GREEN)✅ PostgreSQL: OK$(NC)" || echo "$(RED)❌ PostgreSQL: Erreur$(NC)"
+	@echo ""
+	@echo "$(YELLOW)[2/7]$(NC) Vérification Airflow Webserver..."
+	@curl -s http://localhost:8082/health > /dev/null 2>&1 && echo "$(GREEN)✅ Airflow Webserver: OK$(NC)" || echo "$(YELLOW)⚠️  Airflow Webserver: En démarrage...$(NC)"
+	@echo ""
+	@echo "$(YELLOW)[3/7]$(NC) Vérification Airflow Scheduler..."
+	@docker ps | grep -q instagram-airflow-scheduler && echo "$(GREEN)✅ Airflow Scheduler: OK$(NC)" || echo "$(RED)❌ Airflow Scheduler: Erreur$(NC)"
+	@echo ""
+	@echo "$(YELLOW)[4/7]$(NC) Vérification Dashboard..."
+	@curl -s http://localhost:8000/ > /dev/null 2>&1 && echo "$(GREEN)✅ Dashboard: OK$(NC)" || echo "$(YELLOW)⚠️  Dashboard: En démarrage...$(NC)"
+	@echo ""
+	@echo "$(YELLOW)[5/7]$(NC) Vérification Elasticsearch..."
+	@curl -s http://localhost:9200/_cluster/health > /dev/null 2>&1 && echo "$(GREEN)✅ Elasticsearch: OK$(NC)" || echo "$(YELLOW)⚠️  Elasticsearch: En démarrage...$(NC)"
+	@echo ""
+	@echo "$(YELLOW)[6/7]$(NC) Vérification Kibana..."
+	@curl -s http://localhost:5601/api/status > /dev/null 2>&1 && echo "$(GREEN)✅ Kibana: OK$(NC)" || echo "$(YELLOW)⚠️  Kibana: En démarrage...$(NC)"
+	@echo ""
+	@echo "$(YELLOW)[7/7]$(NC) Vérification X11 (mode visuel)..."
+	@if [ -n "$$DISPLAY" ] && [ -d /tmp/.X11-unix ]; then \
+		echo "$(GREEN)✅ X11: Configuré (DISPLAY=$$DISPLAY)$(NC)"; \
+	else \
+		echo "$(YELLOW)⚠️  X11: Non configuré (mode visuel non disponible)$(NC)"; \
+	fi
+	@echo ""
+	@echo "$(GREEN)✅ Vérification terminée !$(NC)"
+	@echo ""
+	@make --no-print-directory urls
+
+test-visual-mode: ## Tester le mode visuel avec xeyes
+	@echo "$(BLUE)🎨 Test du mode visuel...$(NC)"
+	@echo ""
+	@if [ -z "$$DISPLAY" ]; then \
+		echo "$(RED)❌ DISPLAY non configuré$(NC)"; \
+		echo "$(YELLOW)Exécutez: make setup-x11$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(YELLOW)Test avec xeyes (fenêtre avec des yeux)...$(NC)"
+	@echo "$(YELLOW)Appuyez sur Ctrl+C pour fermer la fenêtre de test$(NC)"
+	@docker run --rm -e DISPLAY=$$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix fr3nd/xeyes || \
+		(echo "$(RED)❌ Test échoué$(NC)"; \
+		 echo "$(YELLOW)Vérifiez:$(NC)"; \
+		 echo "  1. Serveur X11 lancé (VcXsrv/X410/WSLg)"; \
+		 echo "  2. make setup-x11 exécuté"; \
+		 exit 1)
+	@echo ""
+	@echo "$(GREEN)✅ Mode visuel fonctionne !$(NC)"
+
+test-scraping: ## Tester un scraping manuel (compte: mariadlaura)
+	@echo "$(BLUE)🧪 Test de scraping manuel...$(NC)"
+	@docker exec instagram-airflow-scheduler python3 /opt/airflow/scripts/instagram_scraping_ml_pipeline.py mariadlaura || \
+		(echo "$(RED)❌ Test de scraping échoué$(NC)"; exit 1)
+	@echo "$(GREEN)✅ Test de scraping terminé$(NC)"
 
 # =============================================================================
 # Aide par défaut

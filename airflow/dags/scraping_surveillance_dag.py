@@ -60,6 +60,7 @@ dag = DAG(
     description='Pipeline de surveillance Instagram ~4h (6x/jour) avec 3 passes + délais aléatoires + agrégation à 23h',
     schedule_interval='0 2,6,10,14,18,23 * * *',  # Heures en timezone Europe/Paris (2h, 6h, 10h, 14h, 18h, 23h Paris)
     catchup=False,
+    max_active_runs=3,  # Permet jusqu'à 3 runs simultanés pour éviter l'accumulation
     tags=['instagram', 'scraping', 'ml', 'surveillance']
 )
 
@@ -112,7 +113,7 @@ def run_single_account_scraping(account_info: dict):
     Exécute le script unifié de scraping pour un compte Instagram.
     Le script intègre : scraping multi-passes + ML + stockage multi-couches.
 
-    ⚠️ Délai aléatoire de 0-45min ajouté au démarrage pour éviter la détection Instagram
+    ⚠️ Délai aléatoire de 0-17min ajouté au démarrage pour éviter la détection Instagram
     """
     import sys
     import time
@@ -120,8 +121,8 @@ def run_single_account_scraping(account_info: dict):
 
     account = account_info['account']
 
-    # Délai aléatoire de 0 à 45 minutes pour éviter détection Instagram
-    random_delay_seconds = random.randint(0, 45 * 60)  # 0 à 2700 secondes (45 minutes)
+    # Délai aléatoire de 0 à 17 minutes pour éviter détection Instagram
+    random_delay_seconds = random.randint(0, 17 * 60)  # 0 à 1020 secondes (17 minutes)
     random_delay_minutes = random_delay_seconds // 60
     random_delay_remaining = random_delay_seconds % 60
 
@@ -185,7 +186,7 @@ def aggregate_results(**kwargs):
     import os
     from datetime import datetime
     from pyspark.sql import SparkSession
-    from pyspark.sql.functions import lit
+    from pyspark.sql.functions import lit, current_date, to_date
 
     # Vérification horaire : utiliser l'heure de déclenchement PRÉVUE en timezone Europe/Paris
     # (important car le scraping peut avoir un délai aléatoire de 0-45min)
@@ -320,7 +321,12 @@ def aggregate_results(**kwargs):
 
     if aggregated_final_df is not None:
         try:
+            # Ajouter la date d'agrégation pour pouvoir filtrer par jour
+            aggregation_date_str = datetime.now().strftime("%Y-%m-%d")
+            aggregated_final_df = aggregated_final_df.withColumn("aggregation_date", lit(aggregation_date_str))
+
             print(f"🔵 [aggregate_results] Insertion du Parquet final_aggregated dans PostgreSQL ({postgres_url}) ...")
+            print(f"📅 [aggregate_results] Date d'agrégation : {aggregation_date_str}")
             aggregated_final_df.write \
                 .format("jdbc") \
                 .option("url", postgres_url) \
@@ -336,6 +342,10 @@ def aggregate_results(**kwargs):
 
     if aggregated_comp_df is not None:
         try:
+            # Ajouter la date d'agrégation
+            aggregation_date_str = datetime.now().strftime("%Y-%m-%d")
+            aggregated_comp_df = aggregated_comp_df.withColumn("aggregation_date", lit(aggregation_date_str))
+
             print(f"🔵 [aggregate_results] Insertion du Parquet final_comparatif dans PostgreSQL ({postgres_url}) ...")
             aggregated_comp_df.write \
                 .format("jdbc") \

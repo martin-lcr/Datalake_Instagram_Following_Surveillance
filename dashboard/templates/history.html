@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historique des changements - Instagram Surveillance</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+    <div x-data="historyApp()" x-init="loadData()" class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 class="text-3xl font-bold flex items-center gap-3">
+                            <i class="fas fa-history"></i>
+                            Historique des changements
+                        </h1>
+                        <p class="text-purple-100 mt-1">Ajouts et suppressions de followings par jour</p>
+                    </div>
+                    <div class="text-right">
+                        <a href="/" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm transition-colors">
+                            <i class="fas fa-arrow-left"></i> Retour au dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Filtres -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <i class="fas fa-filter"></i> Filtres
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <!-- Compte -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Compte</label>
+                        <select x-model="filters.account" @change="loadData()"
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                            <option value="">Tous les comptes</option>
+                            <template x-for="account in availableAccounts" :key="account">
+                                <option :value="account" x-text="account"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <!-- Date -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                        <select x-model="filters.date" @change="loadData()"
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                            <option value="">Toutes les dates</option>
+                            <template x-for="date in availableDates" :key="date">
+                                <option :value="date" x-text="date"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <!-- Action -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Action</label>
+                        <select x-model="filters.action" @change="loadData()"
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                            <option value="">Toutes</option>
+                            <option value="added">Ajouts uniquement</option>
+                            <option value="deleted">Suppressions uniquement</option>
+                        </select>
+                    </div>
+
+                    <!-- Reset -->
+                    <div class="flex items-end">
+                        <button @click="resetFilters()"
+                                class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition-colors">
+                            <i class="fas fa-undo"></i> Réinitialiser
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Résumé par jour -->
+            <div class="bg-white rounded-lg shadow mb-6">
+                <div class="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+                        <i class="fas fa-chart-bar"></i>
+                        Résumé par jour
+                    </h2>
+                </div>
+
+                <div x-show="loading" class="p-8 text-center">
+                    <i class="fas fa-spinner fa-spin text-3xl text-purple-600"></i>
+                    <p class="text-gray-600 mt-3">Chargement...</p>
+                </div>
+
+                <div x-show="!loading && summary.length === 0" class="p-8 text-center">
+                    <i class="fas fa-inbox text-4xl text-gray-300"></i>
+                    <p class="text-gray-500 mt-3">Aucune donnée disponible</p>
+                </div>
+
+                <div x-show="!loading && summary.length > 0" class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Compte</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    <span class="text-purple-600"><i class="fas fa-users"></i> Total</span>
+                                </th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    <span class="text-green-600"><i class="fas fa-plus-circle"></i> Ajouts</span>
+                                </th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    <span class="text-red-600"><i class="fas fa-minus-circle"></i> Suppressions</span>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <template x-for="row in summary" :key="row.date + row.target_account">
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900" x-text="row.date"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <a :href="'/account/' + row.target_account" class="text-purple-600 hover:text-purple-800 font-medium">
+                                            <i class="fab fa-instagram mr-1"></i>
+                                            <span x-text="row.target_account"></span>
+                                        </a>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                                        <span class="text-purple-600 font-bold" x-text="row.total_followings"></span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                                        <span class="text-green-600 font-bold" x-text="'+' + row.added_count"></span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                                        <span class="text-red-600 font-bold" x-text="'-' + row.deleted_count"></span>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Liste détaillée des changements -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+                        <i class="fas fa-list-ul"></i>
+                        Détail des changements
+                        <span class="text-sm font-normal text-gray-500" x-text="'(' + changes.length + ' résultats)'"></span>
+                    </h2>
+                </div>
+
+                <div x-show="loading" class="p-8 text-center">
+                    <i class="fas fa-spinner fa-spin text-3xl text-purple-600"></i>
+                    <p class="text-gray-600 mt-3">Chargement...</p>
+                </div>
+
+                <div x-show="!loading && changes.length === 0" class="p-8 text-center">
+                    <i class="fas fa-inbox text-4xl text-gray-300"></i>
+                    <p class="text-gray-500 mt-3">Aucun changement trouvé avec ces filtres</p>
+                </div>
+
+                <div x-show="!loading && changes.length > 0" class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Compte cible</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nom complet</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Genre</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <template x-for="change in changes" :key="change.date + change.target_account + change.username + change.action">
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="change.date"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <a :href="'/account/' + change.target_account" class="text-purple-600 hover:text-purple-800 text-sm">
+                                            <span x-text="change.target_account"></span>
+                                        </a>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span x-show="change.action === 'added'"
+                                              class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                            <i class="fas fa-plus-circle mr-1"></i> Ajouté
+                                        </span>
+                                        <span x-show="change.action === 'deleted'"
+                                              class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                            <i class="fas fa-minus-circle mr-1"></i> Supprimé
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <a :href="'https://instagram.com/' + change.username" target="_blank"
+                                           class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                            @<span x-text="change.username"></span>
+                                            <i class="fas fa-external-link-alt ml-1 text-xs"></i>
+                                        </a>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="change.full_name || '-'"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span x-show="change.predicted_gender === 'male'" class="text-blue-600">
+                                            <i class="fas fa-mars"></i> Homme
+                                        </span>
+                                        <span x-show="change.predicted_gender === 'female'" class="text-pink-600">
+                                            <i class="fas fa-venus"></i> Femme
+                                        </span>
+                                        <span x-show="change.predicted_gender === 'unknown'" class="text-gray-400">
+                                            <i class="fas fa-question"></i> Inconnu
+                                        </span>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div x-show="changes.length >= 500" class="p-4 bg-yellow-50 border-t border-yellow-100 text-center">
+                    <p class="text-yellow-700 text-sm">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Affichage limité à 500 résultats. Utilisez les filtres pour affiner votre recherche.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="mt-8 text-center text-gray-500 text-sm">
+                <p>
+                    <a href="/" class="text-purple-600 hover:text-purple-800">
+                        <i class="fas fa-home"></i> Dashboard
+                    </a>
+                    <span class="mx-2">•</span>
+                    <a href="http://localhost:8082" target="_blank" class="text-purple-600 hover:text-purple-800">
+                        <i class="fas fa-cog"></i> Airflow
+                    </a>
+                    <span class="mx-2">•</span>
+                    <a href="http://localhost:5601" target="_blank" class="text-purple-600 hover:text-purple-800">
+                        <i class="fas fa-chart-bar"></i> Kibana
+                    </a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function historyApp() {
+            return {
+                changes: [],
+                summary: [],
+                loading: true,
+                availableDates: [],
+                availableAccounts: [],
+                filters: {
+                    account: '',
+                    date: '',
+                    action: ''
+                },
+
+                async loadData() {
+                    this.loading = true;
+                    try {
+                        // Charger les dates et comptes disponibles (première fois)
+                        if (this.availableDates.length === 0) {
+                            const datesResponse = await fetch('/api/available-dates');
+                            const datesData = await datesResponse.json();
+                            this.availableDates = datesData.dates || [];
+                        }
+
+                        if (this.availableAccounts.length === 0) {
+                            const accountsResponse = await fetch('/api/accounts');
+                            const accountsData = await accountsResponse.json();
+                            this.availableAccounts = (accountsData.accounts || []).map(a => a.target_account);
+                        }
+
+                        // Construire les paramètres de requête
+                        const params = new URLSearchParams();
+                        if (this.filters.account) params.append('account', this.filters.account);
+                        if (this.filters.date) params.append('date', this.filters.date);
+                        if (this.filters.action) params.append('action', this.filters.action);
+
+                        const queryString = params.toString() ? '?' + params.toString() : '';
+
+                        // Charger le résumé
+                        const summaryParams = new URLSearchParams();
+                        if (this.filters.account) summaryParams.append('account', this.filters.account);
+                        const summaryQuery = summaryParams.toString() ? '?' + summaryParams.toString() : '';
+
+                        const summaryResponse = await fetch('/api/history/summary' + summaryQuery);
+                        const summaryData = await summaryResponse.json();
+                        this.summary = summaryData.summary || [];
+
+                        // Charger les changements détaillés
+                        const changesResponse = await fetch('/api/history/daily-changes' + queryString);
+                        const changesData = await changesResponse.json();
+                        this.changes = changesData.changes || [];
+
+                    } catch (error) {
+                        console.error('Erreur lors du chargement des données:', error);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                resetFilters() {
+                    this.filters = {
+                        account: '',
+                        date: '',
+                        action: ''
+                    };
+                    this.loadData();
+                }
+            }
+        }
+    </script>
+</body>
+</html>

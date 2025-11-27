@@ -66,6 +66,10 @@ RUN mkdir -p /opt/airflow/scripts \
 RUN mkdir -p /sources && \
     ln -sf /opt/airflow /sources/instagram_surveillance
 
+# Créer lien symbolique Java pour compatibilité ARM64/AMD64
+RUN ARCH=$(dpkg --print-architecture) && \
+    ln -sf /usr/lib/jvm/java-17-openjdk-$ARCH /usr/lib/jvm/java-17-openjdk
+
 # Permissions
 RUN chown -R airflow:root /opt/airflow/scripts \
                            /opt/airflow/dags \
@@ -97,7 +101,7 @@ RUN python -c "import selenium; print(f'✅ Selenium {selenium.__version__}')" &
 # ==============================================================================
 
 # Java pour Spark
-ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 # Spark

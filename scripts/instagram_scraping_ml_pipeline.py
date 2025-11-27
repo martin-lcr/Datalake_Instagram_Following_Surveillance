@@ -36,6 +36,9 @@ from elasticsearch.helpers import bulk
 # ML imports
 import gender_guesser.detector as gender
 
+# Quality tracking import
+from scraping_quality_tracker import ScrapingQualityTracker
+
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
@@ -63,6 +66,15 @@ POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
 POSTGRES_DB = os.getenv("POSTGRES_DB", "airflow")
 POSTGRES_USER = os.getenv("POSTGRES_USER", "airflow")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "airflow")
+
+# Configuration pour le Quality Tracker
+POSTGRES_CONFIG = {
+    'host': POSTGRES_HOST,
+    'port': POSTGRES_PORT,
+    'database': POSTGRES_DB,
+    'user': POSTGRES_USER,
+    'password': POSTGRES_PASSWORD
+}
 
 # Configuration Elasticsearch
 ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "elasticsearch")
@@ -188,7 +200,100 @@ def extract_fullname_robust(link_element, username):
         return None
 
 
-def scrape_single_pass(username, pass_number, total_passes, cookies_file, scroll_delay=1.2, patience=10):
+def extract_instagram_reported_total(driver, username):
+    """
+    Extrait le nombre total réel de followings depuis la page Instagram
+    avant d'ouvrir la modal. Ce nombre est le "ground truth" visible sur Instagram.
+
+    Args:
+        driver: Instance Selenium WebDriver
+        username: Nom du compte Instagram
+
+    Returns:
+        int: Nombre total de followings reporté par Instagram, ou None si extraction échoue
+    """
+    try:
+        # Le nombre total est dans un lien avec href="/username/following/"
+        # Format HTML: <a href="/username/following/"><span>357</span> suivi(e)s</a>
+
+        # Méthode 1: Chercher via XPath le span contenant le nombre dans le lien "following"
+        try:
+            following_link = driver.find_element(
+                By.XPATH,
+                f"//a[contains(@href, '/{username}/following/')]"
+            )
+            # Le premier span dans ce lien contient le nombre
+            number_span = following_link.find_element(By.TAG_NAME, "span")
+            total_text = number_span.text.strip()
+
+            # Nettoyer le texte (enlever les espaces, convertir en int)
+            total = int(total_text.replace(" ", "").replace(",", ""))
+            print(f"✅ Instagram reported total extrait: {total} followings")
+            return total
+
+        except Exception as e:
+            print(f"   ⚠️  Méthode 1 échouée: {e}")
+
+        # Méthode 2: Chercher via le texte "suivi(e)s" ou "following"
+        try:
+            # Chercher tous les éléments contenant "suivi(e)s" ou "following"
+            following_elements = driver.find_elements(
+                By.XPATH,
+                "//a[contains(@href, '/following/')]//span[contains(text(), 'suivi') or contains(text(), 'following')]"
+            )
+
+            for elem in following_elements:
+                # Le nombre est dans le span précédent ou parent
+                parent = elem.find_element(By.XPATH, "./..")
+                spans = parent.find_elements(By.TAG_NAME, "span")
+
+                for span in spans:
+                    text = span.text.strip()
+                    # Vérifier si c'est un nombre
+                    if text and text.replace(" ", "").replace(",", "").isdigit():
+                        total = int(text.replace(" ", "").replace(",", ""))
+                        print(f"✅ Instagram reported total extrait (méthode 2): {total} followings")
+                        return total
+
+        except Exception as e:
+            print(f"   ⚠️  Méthode 2 échouée: {e}")
+
+        # Méthode 3: JavaScript pour parser la page
+        try:
+            total = driver.execute_script("""
+                // Chercher le lien "following"
+                const followingLink = document.querySelector('a[href*="/following/"]');
+                if (followingLink) {
+                    // Extraire tous les spans
+                    const spans = followingLink.querySelectorAll('span');
+                    for (let span of spans) {
+                        const text = span.textContent.trim();
+                        // Si c'est un nombre (peut contenir des espaces ou virgules)
+                        const cleaned = text.replace(/[\s,]/g, '');
+                        if (/^\d+$/.test(cleaned)) {
+                            return parseInt(cleaned, 10);
+                        }
+                    }
+                }
+                return null;
+            """)
+
+            if total:
+                print(f"✅ Instagram reported total extrait (JavaScript): {total} followings")
+                return total
+
+        except Exception as e:
+            print(f"   ⚠️  Méthode JavaScript échouée: {e}")
+
+        print("⚠️  Impossible d'extraire le nombre total depuis Instagram")
+        return None
+
+    except Exception as e:
+        print(f"❌ Erreur extraction instagram_reported_total: {e}")
+        return None
+
+
+def scrape_single_pass(username, pass_number, total_passes, cookies_file, scroll_delay=1.6, patience=10):
     """
     Effectue une passe de scraping avec extraction améliorée des fullnames
     """
@@ -231,6 +336,12 @@ def scrape_single_pass(username, pass_number, total_passes, cookies_file, scroll
         print(f"🔍 Navigation vers @{username}...")
         driver.get(f"https://www.instagram.com/{username}/")
         time.sleep(3)
+
+        # Extraire le nombre total reporté par Instagram (avant d'ouvrir la modal)
+        instagram_reported_total = None
+        if pass_number == 1:  # Extraire seulement à la première passe
+            print("📊 Extraction du nombre total depuis Instagram...")
+            instagram_reported_total = extract_instagram_reported_total(driver, username)
 
         print("🖱️  Clic sur 'following'...")
         following_button = WebDriverWait(driver, 10).until(
@@ -351,7 +462,7 @@ def scrape_single_pass(username, pass_number, total_passes, cookies_file, scroll
             """, scrollable, scroll_distance)
 
             # Délai court pour le mouvement smooth
-            time.sleep(0.4)
+            time.sleep(0.8)
 
             # Attendre que Instagram charge le nouveau contenu
             time.sleep(scroll_delay)
@@ -362,9 +473,13 @@ def scrape_single_pass(username, pass_number, total_passes, cookies_file, scroll
             # Vérifier si de nouveaux éléments sont apparus
             if new_count == last_count:
                 no_change += 1
-                if no_change >= patience:
+                # Pour la première passe, on fait tous les scrolls sans arrêt anticipé
+                if pass_number > 1 and no_change >= patience:
                     print(f"   ✅ Fin après {scroll_num} scrolls (pas de nouveau contenu)")
                     break
+                # Pour la première passe, afficher le progrès même sans nouveaux liens
+                elif pass_number == 1 and scroll_num % 10 == 0:
+                    print(f"   📊 Scroll {scroll_num}/{max_scrolls}: {new_count} liens (=)")
             else:
                 # Du nouveau contenu est apparu
                 added = new_count - last_count
@@ -373,6 +488,10 @@ def scrape_single_pass(username, pass_number, total_passes, cookies_file, scroll
                 no_change = 0
 
             last_count = new_count
+
+        # Message de fin de la boucle de scroll
+        if pass_number == 1:
+            print(f"   ✅ Passe 1 terminée: {max_scrolls} scrolls effectués, {new_count} liens trouvés")
 
         # Extraction AMÉLIORÉE avec méthodes robustes
         print("📊 Extraction AMÉLIORÉE avec méthodes robustes...")
@@ -420,13 +539,13 @@ def scrape_single_pass(username, pass_number, total_passes, cookies_file, scroll
         usernames = set(user_data.keys())
         fullnames_dict = user_data
 
-        return usernames, fullnames_dict
+        return usernames, fullnames_dict, instagram_reported_total
 
     except Exception as e:
         print(f"❌ Erreur passe {pass_number}: {e}")
         import traceback
         traceback.print_exc()
-        return set(), {}
+        return set(), {}, None
 
     finally:
         if driver:
@@ -453,11 +572,16 @@ def scrape_multipass(username, num_passes, output_dir, cookies_file):
     all_usernames = set()
     all_fullnames_dict = {}
     pass_results = []
+    instagram_reported_total = None  # Sera extrait à la première passe
 
     for pass_num in range(1, num_passes + 1):
-        usernames, fullnames_dict = scrape_single_pass(username, pass_num, num_passes, cookies_file)
+        usernames, fullnames_dict, reported_total = scrape_single_pass(username, pass_num, num_passes, cookies_file)
         pass_results.append(len(usernames))
         all_usernames.update(usernames)
+
+        # Capturer le nombre total reporté par Instagram (extrait à la première passe)
+        if pass_num == 1 and reported_total is not None:
+            instagram_reported_total = reported_total
 
         # Fusionner les dictionnaires (privilégier les fullnames non-None)
         for user, fname in fullnames_dict.items():
@@ -519,6 +643,7 @@ def scrape_multipass(username, num_passes, output_dir, cookies_file):
         "total_passes": num_passes,
         "count": len(all_usernames),
         "fullnames_count": fullnames_with_data,
+        "instagram_reported_total": instagram_reported_total,  # Nombre réel vu sur Instagram
         "data": [
             {
                 "username": u,
@@ -532,9 +657,12 @@ def scrape_multipass(username, num_passes, output_dir, cookies_file):
 
     print(f"\n✅ Fichier combiné créé: {combined_file}")
     print(f"✅ {len(all_usernames)} usernames uniques")
-    print(f"✅ {fullnames_with_data} fullnames capturés\n")
+    print(f"✅ {fullnames_with_data} fullnames capturés")
+    if instagram_reported_total:
+        print(f"📊 Instagram reported total: {instagram_reported_total} followings")
+    print()
 
-    return combined_data, combined_file
+    return combined_data, combined_file, instagram_reported_total
 
 
 # =============================================================================
@@ -549,14 +677,18 @@ def guess_gender_best(full_name, username):
     """
     # Prédiction basée sur full_name
     if full_name and full_name.strip():
-        first_name = full_name.split()[0]
+        first_name = full_name.split()[0].capitalize()
         pred_full = d.get_gender(first_name)
         if pred_full in ["male", "mostly_male"]:
             gender_full = "male"
-            conf_full = 0.9
+            conf_full = 0.9 if pred_full == "male" else 0.8
         elif pred_full in ["female", "mostly_female"]:
             gender_full = "female"
-            conf_full = 0.9
+            conf_full = 0.9 if pred_full == "female" else 0.8
+        elif pred_full == "andy":
+            # Prénom androgyne - essayer avec des variantes connues
+            gender_full = "unknown"
+            conf_full = 0.6
         else:
             gender_full = "unknown"
             conf_full = 0.5
@@ -568,13 +700,17 @@ def guess_gender_best(full_name, username):
     if username and username.strip():
         cleaned_username = re.sub(r'[^A-Za-z]', '', username)
         if cleaned_username:
-            pred_user = d.get_gender(cleaned_username)
+            # Essayer d'extraire un prénom du username
+            pred_user = d.get_gender(cleaned_username.capitalize())
             if pred_user in ["male", "mostly_male"]:
                 gender_user = "male"
-                conf_user = 0.7
+                conf_user = 0.7 if pred_user == "male" else 0.6
             elif pred_user in ["female", "mostly_female"]:
                 gender_user = "female"
-                conf_user = 0.7
+                conf_user = 0.7 if pred_user == "female" else 0.6
+            elif pred_user == "andy":
+                gender_user = "unknown"
+                conf_user = 0.5
             else:
                 gender_user = "unknown"
                 conf_user = 0.4
@@ -597,6 +733,9 @@ def guess_gender_best(full_name, username):
 # =============================================================================
 
 def main():
+    # Chronomètre pour mesurer la durée du scraping
+    start_time = time.time()
+
     print(f"🌀 [INFO] Lancement du pipeline pour le compte : {account} (normalisé : {normalized_account})")
 
     # =============================================================================
@@ -607,7 +746,7 @@ def main():
     print("ÉTAPE 1 : SCRAPING MULTI-PASSES")
     print("="*80)
 
-    scraped_data, json_file = scrape_multipass(
+    scraped_data, json_file, instagram_reported_total = scrape_multipass(
         username=account,
         num_passes=NUM_PASSES,
         output_dir=SCRAPING_OUTPUT_DIR,
@@ -1011,6 +1150,72 @@ def main():
 
     except Exception as e:
         print(f"❌ [ERREUR] Indexation Elasticsearch : {e}")
+
+    # =============================================================================
+    # ÉTAPE 11 : ENREGISTREMENT QUALITÉ SCRAPING
+    # =============================================================================
+
+    print("\n" + "="*80)
+    print("ÉTAPE 11 : ENREGISTREMENT QUALITÉ SCRAPING")
+    print("="*80)
+
+    try:
+        tracker = ScrapingQualityTracker(POSTGRES_CONFIG)
+
+        # Compter le nombre de followings scrapés
+        scraping_count = df_with_ml.count()
+
+        # Calculer la durée du scraping
+        scraping_duration = int(time.time() - start_time)
+
+        # Enregistrer avec métadonnées
+        completeness_score, is_complete = tracker.record_scraping(
+            target_account=normalized_account,
+            scraping_date=datetime.now(),
+            total_followings=scraping_count,
+            scraping_duration_seconds=scraping_duration,
+            instagram_reported_total=instagram_reported_total,  # Nombre réel vu sur Instagram
+            notes=f"Multipass scraping V2 ({NUM_PASSES} passes) - {scraping_count} followings captured"
+        )
+
+        # Afficher le résultat
+        status_icon = "✅" if is_complete else "⚠️"
+        print(f"{status_icon} Score de qualité: {completeness_score:.1f}%")
+        print(f"{status_icon} Scraping {'COMPLET' if is_complete else 'INCOMPLET'}")
+        print(f"⏱️  Durée du scraping: {scraping_duration}s ({scraping_duration//60}m {scraping_duration%60}s)")
+
+        # Si scraping incomplet, avertir
+        if not is_complete:
+            print(f"⚠️  ATTENTION: Ce scraping est incomplet ({completeness_score:.1f}%)")
+            print(f"   Les comparaisons utiliseront le dernier scraping complet comme référence")
+
+        # Obtenir les VRAIS nouveaux followings (si scraping complet)
+        if is_complete:
+            truly_new = tracker.get_truly_new_followings(
+                target_account=normalized_account,
+                scraping_date=datetime.now()
+            )
+
+            print(f"🆕 Vrais nouveaux followings détectés: {len(truly_new)}")
+            if truly_new:
+                print(f"   Premiers nouveaux:")
+                for following in truly_new[:5]:
+                    print(f"     - @{following['username']} ({following['full_name'] or 'N/A'})")
+        else:
+            # Afficher le dernier scraping complet pour référence
+            last_complete = tracker.get_last_complete_scraping(normalized_account)
+            if last_complete:
+                print(f"📊 Dernier scraping complet: {last_complete['scraping_date']}")
+                print(f"   Total: {last_complete['total_followings']} followings")
+                print(f"   Score: {last_complete['completeness_score']:.1f}%")
+
+        print("✅ Qualité du scraping enregistrée avec succès")
+
+    except Exception as e:
+        print(f"⚠️  Erreur enregistrement qualité (non-bloquant): {e}")
+        import traceback
+        traceback.print_exc()
+        # Ne pas bloquer le pipeline si le tracking échoue
 
     # =============================================================================
     # FIN
