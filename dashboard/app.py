@@ -304,6 +304,23 @@ def api_accounts():
                 from datetime import datetime
                 selected_date = datetime.now().strftime('%Y-%m-%d')
 
+        # Lire la liste des comptes actuellement ciblés
+        target_accounts_file = '/app/instagram_accounts_to_scrape.txt'
+        target_accounts_set = set()
+
+        try:
+            if os.path.exists(target_accounts_file):
+                with open(target_accounts_file, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        # Ignorer les lignes vides et les commentaires
+                        if line and not line.startswith('#'):
+                            # Normaliser: remplacer . et _ par -
+                            normalized = line.replace('.', '-').replace('_', '-')
+                            target_accounts_set.add(normalized)
+        except Exception as e:
+            logger.error(f"Erreur lors de la lecture de instagram_accounts_to_scrape.txt: {e}")
+
         # Récupérer la liste des comptes à partir des tables instagram_data_*
         cursor.execute("""
             SELECT DISTINCT table_name
@@ -318,6 +335,13 @@ def api_accounts():
             # Extraire le nom du compte depuis le nom de la table
             table_name = table_row['table_name']
             account_name = table_name.replace('instagram_data_', '')
+
+            # Normaliser le nom du compte pour la comparaison
+            normalized_account_name = account_name.replace('.', '-').replace('_', '-')
+
+            # Filtrer: n'afficher que les comptes dans la liste cible
+            if normalized_account_name not in target_accounts_set:
+                continue
 
             # Utiliser le système de fusion intelligente pour obtenir les stats
             # (la normalisation sera faite à l'intérieur du helper)
@@ -722,6 +746,23 @@ def api_stats():
                 from datetime import datetime
                 selected_date = datetime.now().strftime('%Y-%m-%d')
 
+        # Lire la liste des comptes actuellement ciblés
+        target_accounts_file = '/app/instagram_accounts_to_scrape.txt'
+        target_accounts_set = set()
+
+        try:
+            if os.path.exists(target_accounts_file):
+                with open(target_accounts_file, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        # Ignorer les lignes vides et les commentaires
+                        if line and not line.startswith('#'):
+                            # Normaliser: remplacer . et _ par -
+                            normalized = line.replace('.', '-').replace('_', '-')
+                            target_accounts_set.add(normalized)
+        except Exception as e:
+            logger.error(f"Erreur lors de la lecture de instagram_accounts_to_scrape.txt: {e}")
+
         # Récupérer la liste des comptes
         cursor.execute("""
             SELECT DISTINCT table_name
@@ -745,6 +786,13 @@ def api_stats():
         for table_row in tables:
             table_name = table_row['table_name']
             account_name = table_name.replace('instagram_data_', '')
+
+            # Normaliser le nom du compte pour la comparaison
+            normalized_account_name = account_name.replace('.', '-').replace('_', '-')
+
+            # Filtrer: n'inclure que les comptes dans la liste cible
+            if normalized_account_name not in target_accounts_set:
+                continue
 
             try:
                 # Utiliser le système de fusion avec la date sélectionnée
