@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="bg-gray-50">
-    <div x-data="dashboardApp()" x-init="loadData()" class="min-h-screen">
+    <div x-data="dashboardApp()" x-init="loadData(); loadGlobalVisualMode()" class="min-h-screen">
         <!-- Header -->
         <header class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -32,6 +32,20 @@
                             <a href="/history" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors inline-block">
                                 <i class="fas fa-history"></i> Historique
                             </a>
+                        </div>
+                        <!-- Mode visuel global -->
+                        <div class="mb-3 flex items-center justify-end">
+                            <label class="flex items-center cursor-pointer text-sm text-white">
+                                <input type="checkbox"
+                                       x-model="globalVisualMode"
+                                       @change="toggleGlobalVisualMode()"
+                                       class="mr-2 h-4 w-4 rounded border-white/30 bg-indigo-600 text-green-500 focus:ring-2 focus:ring-white/50">
+                                <span class="font-medium">
+                                    <i class="fas fa-desktop mr-1"></i>
+                                    Mode visuel pour scrapings automatiques
+                                </span>
+                                <span class="ml-2 text-xs text-purple-200">(Chrome visible pendant les scrapings programmés)</span>
+                            </label>
                         </div>
                         <div class="mb-3">
                             <p class="text-purple-200 mb-1">Date d'agrégation</p>
@@ -435,6 +449,47 @@
                 targetAccounts: '',
                 accountsLoading: false,
                 accountsMessage: '',
+                globalVisualMode: false,
+
+                async loadGlobalVisualMode() {
+                    try {
+                        const response = await fetch('/api/global-visual-mode');
+                        const data = await response.json();
+                        if (data.success) {
+                            this.globalVisualMode = data.visual_mode;
+                        }
+                    } catch (error) {
+                        console.error('Erreur lors du chargement du mode visuel global:', error);
+                    }
+                },
+
+                async toggleGlobalVisualMode() {
+                    try {
+                        const response = await fetch('/api/global-visual-mode', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                visual_mode: this.globalVisualMode
+                            })
+                        });
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            console.log(data.message);
+                        } else {
+                            console.error('Erreur:', data.error);
+                            // Revert checkbox on error
+                            this.globalVisualMode = !this.globalVisualMode;
+                        }
+                    } catch (error) {
+                        console.error('Erreur lors de la modification du mode visuel global:', error);
+                        // Revert checkbox on error
+                        this.globalVisualMode = !this.globalVisualMode;
+                    }
+                },
 
                 async loadData() {
                     this.loading = true;

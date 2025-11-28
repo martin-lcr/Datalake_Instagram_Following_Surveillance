@@ -826,6 +826,80 @@ def api_stats():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/global-visual-mode', methods=['GET'])
+def api_get_global_visual_mode():
+    """API: Récupère l'état du mode visuel global (pour les scrapings automatiques)"""
+    try:
+        env_file_path = '/app/docker/.env'
+
+        if not os.path.exists(env_file_path):
+            return jsonify({'success': False, 'error': 'Fichier .env non trouvé'}), 404
+
+        # Lire le fichier .env et chercher VISUAL_MODE
+        visual_mode = False
+        with open(env_file_path, 'r') as f:
+            for line in f:
+                if line.strip().startswith('VISUAL_MODE='):
+                    value = line.split('=')[1].strip()
+                    visual_mode = value.lower() == 'true'
+                    break
+
+        return jsonify({
+            'success': True,
+            'visual_mode': visual_mode
+        })
+
+    except Exception as e:
+        logger.error(f"Erreur lors de la lecture du mode visuel global: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/global-visual-mode', methods=['POST'])
+def api_set_global_visual_mode():
+    """API: Modifie l'état du mode visuel global (pour les scrapings automatiques)"""
+    try:
+        data = request.get_json() or {}
+        visual_mode = data.get('visual_mode', False)
+
+        env_file_path = '/app/docker/.env'
+
+        if not os.path.exists(env_file_path):
+            return jsonify({'success': False, 'error': 'Fichier .env non trouvé'}), 404
+
+        # Lire le fichier .env
+        with open(env_file_path, 'r') as f:
+            lines = f.readlines()
+
+        # Modifier la ligne VISUAL_MODE
+        visual_mode_found = False
+        for i, line in enumerate(lines):
+            if line.strip().startswith('VISUAL_MODE='):
+                lines[i] = f"VISUAL_MODE={'true' if visual_mode else 'false'}\n"
+                visual_mode_found = True
+                break
+
+        # Si VISUAL_MODE n'existe pas, l'ajouter après AIRFLOW_SECRET_KEY
+        if not visual_mode_found:
+            for i, line in enumerate(lines):
+                if line.strip().startswith('AIRFLOW_SECRET_KEY='):
+                    lines.insert(i + 1, f"\nVISUAL_MODE={'true' if visual_mode else 'false'}\n")
+                    break
+
+        # Écrire le fichier .env modifié
+        with open(env_file_path, 'w') as f:
+            f.writelines(lines)
+
+        return jsonify({
+            'success': True,
+            'visual_mode': visual_mode,
+            'message': f"Mode visuel global {'activé' if visual_mode else 'désactivé'} pour les scrapings automatiques"
+        })
+
+    except Exception as e:
+        logger.error(f"Erreur lors de la modification du mode visuel global: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/health')
 def health():
     """Healthcheck endpoint"""
