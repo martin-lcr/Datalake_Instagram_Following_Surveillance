@@ -293,6 +293,84 @@ def extract_instagram_reported_total(driver, username):
         return None
 
 
+def check_and_close_rate_limit_popup(driver):
+    """
+    Détecte et ferme le popup Instagram "Try Again Later / Réessayer plus tard"
+    qui bloque le scrolling après trop de requêtes.
+
+    Returns:
+        bool: True si le popup a été détecté et fermé, False sinon
+    """
+    try:
+        # Chercher le popup avec plusieurs variantes de texte
+        popup_texts = [
+            "Try Again Later",
+            "Réessayer plus tard",
+            "Try again later",
+            "We limit how often you can do certain things",
+            "Nous limitons la fréquence"
+        ]
+
+        # Vérifier si un de ces textes est présent sur la page
+        for text in popup_texts:
+            try:
+                popup_element = driver.find_element(By.XPATH, f"//*[contains(text(), '{text}')]")
+
+                # Si trouvé, chercher le bouton OK
+                print(f"   ⚠️  POPUP DÉTECTÉ: '{text}'")
+
+                # Plusieurs sélecteurs pour le bouton OK
+                ok_button_selectors = [
+                    "//button[contains(@class, '_a9_1')]",  # Classe spécifique du bouton OK
+                    "//button[text()='OK']",
+                    "//button[text()='Ok']",
+                    "//button[contains(text(), 'OK')]",
+                    "//button[contains(@class, '_a9--') and contains(@class, '_ap36') and contains(@class, '_a9_1')]"
+                ]
+
+                for selector in ok_button_selectors:
+                    try:
+                        ok_button = driver.find_element(By.XPATH, selector)
+                        ok_button.click()
+                        print(f"   ✅ POPUP FERMÉ: Clic sur OK réussi")
+                        time.sleep(2)  # Attendre que le popup se ferme
+                        return True
+                    except:
+                        continue
+
+                # Si aucun sélecteur ne fonctionne, essayer avec JavaScript
+                try:
+                    driver.execute_script("""
+                        const buttons = document.querySelectorAll('button');
+                        for (let btn of buttons) {
+                            if (btn.textContent.trim() === 'OK' ||
+                                btn.textContent.trim() === 'Ok' ||
+                                btn.className.includes('_a9_1')) {
+                                btn.click();
+                                return true;
+                            }
+                        }
+                        return false;
+                    """)
+                    print(f"   ✅ POPUP FERMÉ: Clic JavaScript sur OK réussi")
+                    time.sleep(2)
+                    return True
+                except:
+                    pass
+
+                print(f"   ❌ POPUP DÉTECTÉ mais bouton OK non trouvé")
+                return False
+
+            except:
+                continue
+
+        return False
+
+    except Exception as e:
+        # Pas de popup détecté, c'est normal
+        return False
+
+
 def scrape_single_pass(username, pass_number, total_passes, cookies_file, scroll_delay=1.6, patience=10):
     """
     Effectue une passe de scraping avec extraction améliorée des fullnames
@@ -445,6 +523,10 @@ def scrape_single_pass(username, pass_number, total_passes, cookies_file, scroll
             scrollable = modal
             print(f"   ⚠️  Utilisation de la modal comme fallback")
 
+        # Vérification initiale du popup avant de commencer à scroller
+        print("🔍 Vérification popup Instagram...")
+        check_and_close_rate_limit_popup(driver)
+
         # Scroll comme trackpad : grands mouvements répétés
         print(f"📜 Scroll TRACKPAD (100 scrolls max, délai={scroll_delay}s)...")
         last_count = 0
@@ -473,6 +555,17 @@ def scrape_single_pass(username, pass_number, total_passes, cookies_file, scroll
             # Vérifier si de nouveaux éléments sont apparus
             if new_count == last_count:
                 no_change += 1
+
+                # Détecter et fermer le popup s'il bloque le scrolling
+                # (peu de liens après plusieurs scrolls = popup probable)
+                if no_change >= 2 and new_count < 20:
+                    popup_closed = check_and_close_rate_limit_popup(driver)
+                    if popup_closed:
+                        # Réinitialiser le compteur de no_change après avoir fermé le popup
+                        no_change = 0
+                        # Continuer le scrolling immédiatement
+                        continue
+
                 # Pour la première passe, on fait tous les scrolls sans arrêt anticipé
                 if pass_number > 1 and no_change >= patience:
                     print(f"   ✅ Fin après {scroll_num} scrolls (pas de nouveau contenu)")
@@ -486,6 +579,10 @@ def scrape_single_pass(username, pass_number, total_passes, cookies_file, scroll
                 if added > 0:
                     print(f"   📊 Scroll {scroll_num}/{max_scrolls}: {new_count} liens (+{added})")
                 no_change = 0
+
+            # Vérification périodique du popup (tous les 10 scrolls)
+            if scroll_num % 10 == 0:
+                check_and_close_rate_limit_popup(driver)
 
             last_count = new_count
 
