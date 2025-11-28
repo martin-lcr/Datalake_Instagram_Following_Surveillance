@@ -287,6 +287,23 @@ def api_accounts():
         # Paramètre optionnel pour choisir la date
         selected_date = request.args.get('date', None)
 
+        # Si aucune date n'est spécifiée, trouver la date la plus récente avec des scrapings valides
+        if selected_date is None:
+            cursor.execute("""
+                SELECT scraping_date::text
+                FROM scraping_metadata
+                WHERE completeness_score >= 50.0
+                ORDER BY scraping_date DESC
+                LIMIT 1
+            """)
+            result = cursor.fetchone()
+            if result:
+                selected_date = result['scraping_date']
+            else:
+                # Fallback: utiliser aujourd'hui si aucun scraping valide n'existe
+                from datetime import datetime
+                selected_date = datetime.now().strftime('%Y-%m-%d')
+
         # Récupérer la liste des comptes à partir des tables instagram_data_*
         cursor.execute("""
             SELECT DISTINCT table_name
@@ -315,10 +332,6 @@ def api_accounts():
 
             # Calculer les changements par rapport au jour précédent
             from datetime import datetime, timedelta
-
-            # Si aucune date n'est spécifiée, utiliser aujourd'hui
-            if selected_date is None:
-                selected_date = datetime.now().strftime('%Y-%m-%d')
 
             date_obj = datetime.strptime(selected_date, '%Y-%m-%d').date()
             previous_date = (date_obj - timedelta(days=1)).strftime('%Y-%m-%d')
@@ -613,6 +626,26 @@ def api_stats():
     try:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
+        # Paramètre optionnel pour choisir la date
+        selected_date = request.args.get('date', None)
+
+        # Si aucune date n'est spécifiée, trouver la date la plus récente avec des scrapings valides
+        if selected_date is None:
+            cursor.execute("""
+                SELECT scraping_date::text
+                FROM scraping_metadata
+                WHERE completeness_score >= 50.0
+                ORDER BY scraping_date DESC
+                LIMIT 1
+            """)
+            result = cursor.fetchone()
+            if result:
+                selected_date = result['scraping_date']
+            else:
+                # Fallback: utiliser aujourd'hui si aucun scraping valide n'existe
+                from datetime import datetime
+                selected_date = datetime.now().strftime('%Y-%m-%d')
+
         # Récupérer la liste des comptes
         cursor.execute("""
             SELECT DISTINCT table_name
@@ -638,8 +671,8 @@ def api_stats():
             account_name = table_name.replace('instagram_data_', '')
 
             try:
-                # Utiliser le système de fusion
-                account_stats = get_smart_unified_stats_for_account(DB_CONFIG, account_name)
+                # Utiliser le système de fusion avec la date sélectionnée
+                account_stats = get_smart_unified_stats_for_account(DB_CONFIG, account_name, selected_date)
 
                 if account_stats['total'] > 0:
                     stats['total_accounts'] += 1
@@ -648,12 +681,12 @@ def api_stats():
                     stats['total_female'] += account_stats['female']
                     stats['total_unknown'] += account_stats['unknown']
 
-                # Calculer les changements jour-à-jour pour ce compte
+                # Calculer les changements par rapport au jour précédent
                 from datetime import datetime, timedelta
-                today = datetime.now().strftime('%Y-%m-%d')
-                yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+                date_obj = datetime.strptime(selected_date, '%Y-%m-%d').date()
+                previous_date = (date_obj - timedelta(days=1)).strftime('%Y-%m-%d')
 
-                changes = detect_changes_between_days(DB_CONFIG, account_name, today, yesterday)
+                changes = detect_changes_between_days(DB_CONFIG, account_name, selected_date, previous_date)
                 stats['added_today'] += changes['added_count']
                 stats['deleted_today'] += changes['deleted_count']
 
