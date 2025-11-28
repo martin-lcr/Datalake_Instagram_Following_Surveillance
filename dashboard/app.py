@@ -455,8 +455,34 @@ def api_day_to_day_stats(account_name):
     try:
         from datetime import datetime, timedelta
 
-        # Utiliser la date actuelle par défaut
-        date_str = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+        # Récupérer la date ou utiliser la plus récente avec scrapings valides
+        date_str = request.args.get('date', None)
+
+        if date_str is None:
+            conn = get_db_connection()
+            if conn:
+                try:
+                    cursor = conn.cursor(cursor_factory=RealDictCursor)
+                    cursor.execute("""
+                        SELECT scraping_date::text
+                        FROM scraping_metadata
+                        WHERE completeness_score >= 50.0
+                        ORDER BY scraping_date DESC
+                        LIMIT 1
+                    """)
+                    result = cursor.fetchone()
+                    if result:
+                        date_str = result['scraping_date']
+                    else:
+                        date_str = datetime.now().strftime('%Y-%m-%d')
+                    cursor.close()
+                    conn.close()
+                except Exception as e:
+                    logger.error(f"Erreur lors de la récupération de la date: {e}")
+                    if conn:
+                        conn.close()
+                    date_str = datetime.now().strftime('%Y-%m-%d')
+
         date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
         previous_date = (date_obj - timedelta(days=1)).strftime('%Y-%m-%d')
 
@@ -482,7 +508,33 @@ def api_day_to_day_changes(account_name):
         from datetime import datetime, timedelta
 
         action_filter = request.args.get('action', 'added')  # 'added' ou 'deleted'
-        date_str = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+        date_str = request.args.get('date', None)
+
+        # Si aucune date n'est spécifiée, utiliser la plus récente avec scrapings valides
+        if date_str is None:
+            conn = get_db_connection()
+            if conn:
+                try:
+                    cursor = conn.cursor(cursor_factory=RealDictCursor)
+                    cursor.execute("""
+                        SELECT scraping_date::text
+                        FROM scraping_metadata
+                        WHERE completeness_score >= 50.0
+                        ORDER BY scraping_date DESC
+                        LIMIT 1
+                    """)
+                    result = cursor.fetchone()
+                    if result:
+                        date_str = result['scraping_date']
+                    else:
+                        date_str = datetime.now().strftime('%Y-%m-%d')
+                    cursor.close()
+                    conn.close()
+                except Exception as e:
+                    logger.error(f"Erreur lors de la récupération de la date: {e}")
+                    if conn:
+                        conn.close()
+                    date_str = datetime.now().strftime('%Y-%m-%d')
 
         # Calculer la date précédente
         date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
@@ -526,6 +578,30 @@ def api_followings(account_name):
 
         # Récupérer les followings fusionnés via le helper
         date_param = request.args.get('date', None)  # Format YYYY-MM-DD
+
+        # Si aucune date n'est spécifiée, utiliser la date la plus récente avec des scrapings valides
+        if date_param is None:
+            conn = get_db_connection()
+            if conn:
+                try:
+                    cursor = conn.cursor(cursor_factory=RealDictCursor)
+                    cursor.execute("""
+                        SELECT scraping_date::text
+                        FROM scraping_metadata
+                        WHERE completeness_score >= 50.0
+                        ORDER BY scraping_date DESC
+                        LIMIT 1
+                    """)
+                    result = cursor.fetchone()
+                    if result:
+                        date_param = result['scraping_date']
+                    cursor.close()
+                    conn.close()
+                except Exception as e:
+                    logger.error(f"Erreur lors de la récupération de la date: {e}")
+                    if conn:
+                        conn.close()
+
         unified_data = get_smart_unified_followings(DB_CONFIG, account_name, date_param)
 
         if 'error' in unified_data:
