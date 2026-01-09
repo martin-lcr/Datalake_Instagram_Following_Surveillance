@@ -46,7 +46,7 @@ Ce projet permet de surveiller automatiquement les abonnements (followings) de c
 ### 1️⃣ Cloner le projet
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/Datalake_Instagram_Following_Surveillance.git
+git clone https://github.com/martin-lcr/Datalake_Instagram_Following_Surveillance.git
 cd Datalake_Instagram_Following_Surveillance
 ```
 
@@ -657,7 +657,7 @@ Ce projet est sous licence **MIT** - voir le fichier [LICENSE](LICENSE) pour plu
 
 ## 👨‍💻 Auteur
 
-Développé par [@YOUR_GITHUB_USERNAME](https://github.com/YOUR_GITHUB_USERNAME)
+Développé par Martin Le Corre
 
 **Stack technique** :
 - Apache Airflow 2.10.3
@@ -683,9 +683,9 @@ Si ce projet vous a été utile, n'hésitez pas à lui donner une étoile ⭐ su
 
 ## 📊 Statistiques du projet
 
-![GitHub stars](https://img.shields.io/github/stars/YOUR_USERNAME/Datalake_Instagram_Following_Surveillance?style=social)
-![GitHub forks](https://img.shields.io/github/forks/YOUR_USERNAME/Datalake_Instagram_Following_Surveillance?style=social)
-![GitHub issues](https://img.shields.io/github/issues/YOUR_USERNAME/Datalake_Instagram_Following_Surveillance)
+![GitHub stars](https://img.shields.io/github/stars/martin-lcr/Datalake_Instagram_Following_Surveillance?style=social)
+![GitHub forks](https://img.shields.io/github/forks/martin-lcr/Datalake_Instagram_Following_Surveillance?style=social)
+![GitHub issues](https://img.shields.io/github/issues/martin-lcr/Datalake_Instagram_Following_Surveillance)
 
 ---
 
